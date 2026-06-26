@@ -24,68 +24,82 @@
       --shadow:      0 4px 24px rgba(0,0,0,0.45);
     }
     html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg-dark); color: var(--text-main); overflow: hidden; }
-    #app { display: flex; height: 100vh; position: relative; }
+    #app { display: flex; height: 100vh; position: relative; overflow: hidden; }
 
     /* ── Sidebar ── */
     #sidebar {
-      width: 300px; min-width: 300px;
+      position: relative;
+      width: 300px;
+      flex-shrink: 0;
       background: var(--panel-bg);
       border-right: 1px solid var(--panel-border);
       display: flex; flex-direction: column;
       overflow: hidden;
       z-index: 100;
       box-shadow: var(--shadow);
-      transition: transform 0.3s ease, width 0.3s ease, min-width 0.3s ease;
+      transition: width 0.3s ease;
     }
-    #sidebar.collapsed {
-      transform: translateX(-100%);
-      width: 0; min-width: 0;
-    }
+    #sidebar.collapsed { width: 0; }
+    #sidebar.collapsed > * { display: none; }
 
-    /* ── Tombol toggle sidebar (pojok kanan atas peta) ── */
+    /* ── Map ── */
+    #map { flex: 1; min-width: 0; }
+
+    /* ── Tombol toggle ── */
     #sidebar-toggle {
       position: fixed;
-      top: 16px;
-      right: 16px;
-      z-index: 1000;
-      width: 44px; height: 44px;
+      top: 14px;
+      left: 14px;
+      z-index: 9999;
+      width: 46px; height: 46px;
       background: var(--accent);
       border: none;
-      border-radius: 8px;
+      border-radius: 10px;
       cursor: pointer;
       display: flex; align-items: center; justify-content: center;
-      font-size: 20px;
+      font-size: 22px;
       color: #fff;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.55);
       transition: background 0.2s, transform 0.15s;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
     }
-    #sidebar-toggle:hover  { background: var(--accent-light); transform: scale(1.06); }
-    #sidebar-toggle:active { transform: scale(0.95); }
-    @media (max-width: 640px) {
-      #sidebar-toggle { top: 12px; right: 12px; width: 42px; height: 42px; font-size: 18px; }
-    }
+    #sidebar-toggle:hover  { background: var(--accent-light); }
+    #sidebar-toggle:active { transform: scale(0.92); }
 
     /* ── Mobile ── */
     @media (max-width: 640px) {
+      /* Sidebar overlay di atas peta */
       #sidebar {
-        position: absolute;
+        position: fixed !important;
         top: 0; left: 0;
-        height: 100%;
-        width: 88vw !important;
-        min-width: 0 !important;
-        max-width: 340px;
+        height: 100% !important;
+        width: 85vw !important;
+        max-width: 320px;
+        z-index: 500;
+        transition: transform 0.3s ease !important;
+        transform: translateX(0);
       }
-      #sidebar.collapsed { transform: translateX(-100%); }
-      #sidebar-toggle { left: 88vw; max-left: 340px; top: 50%; }
-      #sidebar-toggle.collapsed { left: 0; }
-      #map { width: 100vw; }
-
-      /* Perbesar elemen untuk touch */
-      .vt-btn { padding: 10px 4px; font-size: 12px; }
+      #sidebar.collapsed {
+        transform: translateX(-100%) !important;
+        width: 85vw !important;   /* tetap lebar, cukup geser */
+      }
+      #sidebar.collapsed > * { display: flex !important; }
+      /* Overlay gelap di belakang sidebar saat terbuka */
+      #map-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.45);
+        z-index: 499;
+      }
+      #map-overlay.show { display: block; }
+      /* Perbesar elemen touch */
+      #sidebar-toggle { width: 44px; height: 44px; font-size: 20px; top: 12px; left: 12px; }
+      .vt-btn { padding: 11px 4px; font-size: 12px; }
       .import-btn { padding: 12px; font-size: 14px; }
       #sidebar-body { padding: 14px; }
-      .form-group select, .form-group input { font-size: 15px; padding: 10px; }
-      .toggle-row { margin-bottom: 14px; }
+      .form-group select, .form-group input { font-size: 16px; padding: 10px; }
       .switch { width: 44px; height: 24px; }
       .slider:before { width: 18px; height: 18px; }
       input:checked + .slider:before { transform: translateX(20px); }
@@ -291,8 +305,10 @@
       </div>
     </div>
   </aside>
-  <!-- Tombol toggle sidebar — floating button -->
+  <!-- Tombol toggle sidebar -->
   <button id="sidebar-toggle" onclick="toggleSidebar()" title="Sembunyikan / Tampilkan Menu">&#9776;</button>
+  <!-- Overlay gelap saat sidebar terbuka di mobile -->
+  <div id="map-overlay" onclick="toggleSidebar()"></div>
   <div id="map"></div>
 </div>
 
@@ -806,20 +822,32 @@ document.getElementById('search-input').addEventListener('input', function() {
    TOGGLE SIDEBAR
 ════════════════════════════════════════ */
 function toggleSidebar() {
-  const sidebar = document.getElementById('sidebar');
-  const toggle  = document.getElementById('sidebar-toggle');
-  const isCollapsed = sidebar.classList.toggle('collapsed');
-  // ☰ saat menu tersembunyi, ✕ saat menu tampil
-  toggle.innerHTML = isCollapsed ? '&#9776;' : '&#10005;';
-  setTimeout(() => map.invalidateSize(), 320);
+  const sidebar  = document.getElementById('sidebar');
+  const toggle   = document.getElementById('sidebar-toggle');
+  const overlay  = document.getElementById('map-overlay');
+  const isMobile = window.innerWidth <= 640;
+
+  if (isMobile) {
+    // Mobile: geser sidebar, tampilkan overlay
+    const isCollapsed = sidebar.classList.toggle('collapsed');
+    toggle.innerHTML  = isCollapsed ? '&#9776;' : '&#10005;';
+    overlay.classList.toggle('show', !isCollapsed);
+  } else {
+    // Desktop: perkecil lebar sidebar
+    const isCollapsed = sidebar.classList.toggle('collapsed');
+    toggle.innerHTML  = isCollapsed ? '&#9776;' : '&#10005;';
+    setTimeout(() => map.invalidateSize(), 320);
+  }
 }
 
-// Mobile: sidebar auto-tutup saat klik di peta
-document.getElementById('map').addEventListener('click', () => {
-  if (window.innerWidth <= 640) {
-    const sidebar = document.getElementById('sidebar');
-    if (!sidebar.classList.contains('collapsed')) toggleSidebar();
+// Saat resize dari mobile ke desktop, bersihkan state
+window.addEventListener('resize', () => {
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('map-overlay');
+  if (window.innerWidth > 640) {
+    overlay.classList.remove('show');
   }
+  setTimeout(() => map.invalidateSize(), 320);
 });
 </script>
 </body>
