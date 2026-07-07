@@ -266,7 +266,9 @@
         -1px -1px 2px #000,  1px -1px 2px #000,
         -1px  1px 2px #000,  1px  1px 2px #000;
       white-space: normal;
-      word-break: break-word;
+      word-break: keep-all;
+      overflow-wrap: normal;
+      hyphens: none;
       pointer-events: none;
       text-align: center;
       line-height: 1.15;
@@ -282,22 +284,25 @@
     }
     .kec-label-inner {
       font-family: 'Segoe UI', system-ui, sans-serif;
-      font-size: 15px;
+      font-size: var(--kec-font-size, 14px);
       font-weight: 800;
       text-transform: uppercase;
       letter-spacing: 0.03em;
-      color: #e879f9;
+      color: #b5793a;
       text-shadow:
         0 0 4px #000, 0 0 8px #000,
         -1px -1px 2px #000,  1px -1px 2px #000,
         -1px  1px 2px #000,  1px  1px 2px #000;
       white-space: normal;
-      word-break: break-word;
+      word-break: keep-all;
+      overflow-wrap: normal;
+      hyphens: none;
       pointer-events: none;
       text-align: center;
       line-height: 1.2;
+      transition: font-size 0.15s ease-out;
     }
-    body.light-theme .kec-label-inner { color: #a21caf; }
+    body.light-theme .kec-label-inner { color: #6b4423; }
 
     /* ── Label desa versi kecil (dipakai saat zoom jauh, mode "Semua Kabupaten") ── */
     .desa-label-inner.desa-mini {
@@ -456,11 +461,10 @@ let   showKecLayer     = true;       // tampil/sembunyikan nama & garis batas ke
 let   currentTheme     = 'dark';     // 'dark' | 'light'
 const desaLabelMarkers = {};         // key -> L.marker label
 
-/* Warna garis batas kecamatan per tema — dipilih fuchsia/magenta terang agar
-   kontras jelas dari hijau (Baik), oranye/kuning (Sedang), merah (Buruk),
-   maupun biru (Belum diisi) yang sudah dipakai untuk status sinyal, sehingga
-   tidak tertukar secara visual. */
-const KEC_BOUNDARY_COLOR = { dark: '#e879f9', light: '#a21caf' };
+/* Warna garis batas kecamatan per tema — coklat, senada dengan warna label nama
+   kecamatan, agar konsisten secara visual. Ketebalan dibuat tipis (halus) agar
+   tidak terlalu mendominasi tampilan peta. */
+const KEC_BOUNDARY_COLOR = { dark: '#b5793a', light: '#6b4423' };
 
 /* Batas & label kecamatan (mode "Semua Kabupaten") */
 const kecLabelMarkers  = {};         // kecamatan -> L.marker label
@@ -641,12 +645,24 @@ function getPolygonCenter(layer) {
   try { return layer.getBounds().getCenter(); } catch(_) { return null; }
 }
 
+/* Estimasi lebar kotak label berdasarkan KATA TERPANJANG dalam nama (bukan
+   total karakter), supaya kata tidak pernah perlu dipecah/dipotong di
+   tengah saat teks wrapping ke baris berikutnya. Lebar total tetap dibatasi
+   (maxW) agar nama yang terdiri dari beberapa kata bisa wrap rapi antar
+   kata bila memang tidak cukup ruang untuk satu baris penuh. */
+function estimateLabelWidth(text, charW, minW, maxW) {
+  const words = String(text).split(/\s+/).filter(Boolean);
+  const longestWordW = Math.max(...words.map(w => w.length * charW)) + 6;
+  const naturalW = text.length * charW + 6;
+  return Math.max(minW, longestWordW, Math.min(naturalW, maxW));
+}
+
 function createDesaLabel(layer, desa) {
   const center = getPolygonCenter(layer);
   if (!center) return null;
-  // Estimasi lebar teks agar bisa di-center dengan tepat
-  const charW = 4.6, h = 12;
-  const w = Math.max(desa.length * charW, 34);
+  // Lebar mengikuti kata terpanjang agar tidak ada kata yang terpecah saat wrap
+  const charW = 4.9, h = 12;
+  const w = estimateLabelWidth(desa, charW, 34, 92);
   const icon = L.divIcon({
     className: 'desa-label',
     html: `<div class="desa-label-inner" style="width:${w}px">${desa}</div>`,
@@ -672,6 +688,7 @@ function showDesaLabelsForKec(kec) {
       if (m) { desaLabelMarkers[key] = m; m.addTo(map); }
     }
   });
+  declutterDesaLabels(false);
 }
 
 function hideAllDesaLabels() {
@@ -736,8 +753,11 @@ function buildKecamatanBoundaryData() {
 function createKecLabel(kec, geometry) {
   const center = getGeomCenter(geometry);
   if (!center) return null;
-  const charW = 8, h = 20;
-  const w = Math.max(kec.length * charW, 60);
+  // charW dihitung berdasarkan ukuran font TERBESAR (KEC_FONT_MAX_PX) yang
+  // mungkin dipakai saat responsif terhadap zoom, agar kotak tidak pernah
+  // terlalu sempit dan memaksa kata terpecah.
+  const charW = 9.2, h = 22;
+  const w = estimateLabelWidth(kec, charW, 60, 150);
   const icon = L.divIcon({
     className: 'kec-label',
     html: `<div class="kec-label-inner" style="width:${w}px">${kec}</div>`,
@@ -751,7 +771,7 @@ function initKecamatanBoundariesAndLabels() {
   const kecData = buildKecamatanBoundaryData();
 
   kecBoundaryLayer = L.geoJSON(kecData, {
-    style: { color: KEC_BOUNDARY_COLOR[currentTheme], weight: 3, opacity: 0.95, fillOpacity: 0 },
+    style: { color: KEC_BOUNDARY_COLOR[currentTheme], weight: 1.4, opacity: 0.9, fillOpacity: 0 },
     interactive: false
   });
 
@@ -787,10 +807,25 @@ function showAllKecLabels() {
      atas dan tidak akan tertimpa oleh label desa.
    - Zoom dekat (sudah fokus ke area tertentu): label KECAMATAN disembunyikan,
      label DESA (sesuai toggle "Label Nama Desa") ditampilkan ukuran normal. */
+/* Ukuran font label kecamatan dibuat responsif terhadap level zoom:
+   - Zoom jauh (zoom out): ukuran diperkecil agar teks tidak mendominasi peta.
+   - Mendekati ambang KEC_LABEL_HIDE_ZOOM (zoom in): ukuran membesar secukupnya
+     supaya tetap nyaman dibaca, sebelum akhirnya digantikan label desa. */
+const KEC_FONT_MIN_ZOOM = 8;    // pada/di bawah zoom ini pakai ukuran terkecil
+const KEC_FONT_MIN_PX   = 10;
+const KEC_FONT_MAX_PX   = 16;
+function updateKecFontSize() {
+  const z = map.getZoom();
+  const t = Math.max(0, Math.min(1, (z - KEC_FONT_MIN_ZOOM) / (KEC_LABEL_HIDE_ZOOM - KEC_FONT_MIN_ZOOM)));
+  const px = Math.round(KEC_FONT_MIN_PX + (KEC_FONT_MAX_PX - KEC_FONT_MIN_PX) * t);
+  document.documentElement.style.setProperty('--kec-font-size', px + 'px');
+}
+
 let desaLabelsCurrentlyMini = false;
 function updateKecLabelVisibilityByZoom() {
   if (currentViewMode !== 'all') return;
   const zoomedIn = map.getZoom() >= KEC_LABEL_HIDE_ZOOM;
+  updateKecFontSize();
 
   if (!showKecLayer) {
     // Dimatikan manual lewat toggle "Nama & Garis Kecamatan"
@@ -836,15 +871,10 @@ function setDesaLabelsMini(mini) {
 const DESA_MIN_GAP_PX = 30;   // jarak minimum antar label desa mini
 const KEC_MIN_GAP_PX  = 46;   // jarak minimum label desa mini dari titik label kecamatan
 function declutterDesaLabels(mini) {
-  if (!mini) {
-    // Ukuran normal (zoom dekat / highlight satu kecamatan): jumlah label
-    // jauh lebih sedikit dan tidak perlu di-declutter, tampilkan semua.
-    Object.values(desaLabelMarkers).forEach(m => {
-      const el = m.getElement && m.getElement();
-      if (el) el.style.visibility = '';
-    });
-    return;
-  }
+  // Jarak minimum antar label & terhadap label kecamatan berbeda tergantung
+  // ukuran teks yang sedang aktif (mini = font lebih kecil → jarak lebih rapat OK).
+  const minGapDesa = mini ? DESA_MIN_GAP_PX : 20;
+  const minGapKec  = mini ? KEC_MIN_GAP_PX  : 34;
 
   const kecPoints = Object.values(kecLabelMarkers)
     .filter(m => map.hasLayer(m))
@@ -856,8 +886,8 @@ function declutterDesaLabels(mini) {
     const el = m.getElement && m.getElement();
     if (!el) return;
     const pt = map.latLngToContainerPoint(m.getLatLng());
-    const tooCloseToKec   = kecPoints.some(kp => pt.distanceTo(kp) < KEC_MIN_GAP_PX);
-    const tooCloseToOther = placed.some(pp => pt.distanceTo(pp) < DESA_MIN_GAP_PX);
+    const tooCloseToKec   = kecPoints.some(kp => pt.distanceTo(kp) < minGapKec);
+    const tooCloseToOther = placed.some(pp => pt.distanceTo(pp) < minGapDesa);
     if (tooCloseToKec || tooCloseToOther) {
       el.style.visibility = 'hidden';
     } else {
@@ -983,14 +1013,26 @@ const geoLayer = L.geoJSON(GEOJSON_DATA, {
 map.fitBounds(geoLayer.getBounds(), { padding:[20,20] });
 
 /* Inisialisasi batas & label kecamatan, lalu tampilkan untuk mode awal "Semua Kabupaten".
-   Label desa TIDAK langsung ditampilkan di sini — updateKecLabelVisibilityByZoom()
-   yang akan menentukan label desa/kecamatan mana yang tampil sesuai level zoom awal. */
+   Pembuatan/penambahan LABEL (desa + kecamatan) sengaja DITUNDA ke frame render
+   berikutnya (requestAnimationFrame) karena ini bagian paling berat (~150+ elemen
+   DOM + perhitungan anti-tumpang-tindih). Dengan menundanya, peta & poligon utama
+   bisa tampil lebih dulu sehingga halaman terasa lebih cepat dibuka; label akan
+   langsung menyusul sesaat kemudian (jedanya nyaris tidak terasa). */
 initKecamatanBoundariesAndLabels();
 showKecBoundaries();
-updateKecLabelVisibilityByZoom();
-map.on('zoomend', updateKecLabelVisibilityByZoom);
+requestAnimationFrame(() => {
+  requestAnimationFrame(updateKecLabelVisibilityByZoom);
+});
+map.on('zoomend', () => {
+  if (currentViewMode === 'all') {
+    updateKecLabelVisibilityByZoom();
+  } else if (currentViewMode === 'kecamatan' && showLabels) {
+    declutterDesaLabels(false);
+  }
+});
 map.on('moveend', () => {
   if (currentViewMode === 'all' && showLabels) declutterDesaLabels(desaLabelsCurrentlyMini);
+  else if (currentViewMode === 'kecamatan' && showLabels) declutterDesaLabels(false);
 });
 
 /* ════════════════════════════════════════
