@@ -334,7 +334,7 @@
       <!-- VIEW MODE TOGGLE -->
       <span class="section-label">&#128065; Mode Tampilan</span>
       <div class="view-toggle">
-        <button class="vt-btn active" id="btn-mode-all" onclick="setViewMode('all')">&#127758; Semua<br>Kabupaten</button>
+        <button class="vt-btn active" id="btn-mode-all" onclick="setViewMode('all')">&#127758; Semua<br>Kecamatan</button>
         <button class="vt-btn" id="btn-mode-kec" onclick="setViewMode('kecamatan')">&#128269; Highlight<br>Kecamatan</button>
       </div>
 
@@ -344,6 +344,20 @@
           <label>&#128269; Cari Desa / Kelurahan</label>
           <input type="text" id="search-input" placeholder="Ketik nama desa..." autocomplete="off" />
           <div id="search-suggestions" class="search-suggestions"></div>
+        </div>
+        <div class="toggle-row">
+          <span class="toggle-label">&#128204; Nama &amp; Garis Kecamatan</span>
+          <label class="switch">
+            <input type="checkbox" id="toggle-kec-layer" checked onchange="toggleKecLayer()">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="toggle-row">
+          <span class="toggle-label">&#127991; Label Nama Desa</span>
+          <label class="switch">
+            <input type="checkbox" id="toggle-label-all" checked onchange="toggleLabels('toggle-label-all')">
+            <span class="slider"></span>
+          </label>
         </div>
       </div>
 
@@ -358,7 +372,7 @@
         <div class="toggle-row">
           <span class="toggle-label">&#127991; Label Nama Desa</span>
           <label class="switch">
-            <input type="checkbox" id="toggle-label" checked onchange="toggleLabels()">
+            <input type="checkbox" id="toggle-label-kec" checked onchange="toggleLabels('toggle-label-kec')">
             <span class="slider"></span>
           </label>
         </div>
@@ -437,7 +451,8 @@ const layerMap         = {};
 const kecamatanDesaMap = {};
 let   currentViewMode  = 'all';      // 'all' | 'kecamatan'
 let   highlightKec     = '';         // kecamatan yang di-highlight
-let   showLabels       = true;
+let   showLabels       = true;       // tampil/sembunyikan label nama desa/kelurahan
+let   showKecLayer     = true;       // tampil/sembunyikan nama & garis batas kecamatan
 let   currentTheme     = 'dark';     // 'dark' | 'light'
 const desaLabelMarkers = {};         // key -> L.marker label
 
@@ -777,10 +792,13 @@ function updateKecLabelVisibilityByZoom() {
   if (currentViewMode !== 'all') return;
   const zoomedIn = map.getZoom() >= KEC_LABEL_HIDE_ZOOM;
 
-  if (zoomedIn) {
+  if (!showKecLayer) {
+    // Dimatikan manual lewat toggle "Nama & Garis Kecamatan"
+    hideKecBoundaries();
     hideAllKecLabels();
   } else {
-    showAllKecLabels();
+    showKecBoundaries();
+    if (zoomedIn) hideAllKecLabels(); else showAllKecLabels();
   }
 
   if (showLabels) {
@@ -791,6 +809,13 @@ function updateKecLabelVisibilityByZoom() {
   } else {
     hideAllDesaLabels();
   }
+}
+
+/* Toggle manual untuk menampilkan/menyembunyikan nama & garis batas kecamatan
+   (mode "Semua Kecamatan"), terlepas dari level zoom saat ini. */
+function toggleKecLayer() {
+  showKecLayer = document.getElementById('toggle-kec-layer').checked;
+  updateKecLabelVisibilityByZoom();
 }
 
 /* Perkecil/redupkan (atau kembalikan ke ukuran normal) seluruh label desa
@@ -842,8 +867,16 @@ function declutterDesaLabels(mini) {
   });
 }
 
-function toggleLabels() {
-  showLabels = document.getElementById('toggle-label').checked;
+function toggleLabels(sourceId) {
+  const src = document.getElementById(sourceId);
+  showLabels = src ? src.checked : showLabels;
+  // Sinkronkan checkbox pasangannya (panel "Semua Kecamatan" & panel "Highlight Kecamatan")
+  // agar keduanya selalu menampilkan status yang sama.
+  ['toggle-label-all', 'toggle-label-kec'].forEach(id => {
+    if (id === sourceId) return;
+    const el = document.getElementById(id);
+    if (el) el.checked = showLabels;
+  });
   if (currentViewMode === 'kecamatan' && highlightKec) {
     if (showLabels) showDesaLabelsForKec(highlightKec);
     else hideAllDesaLabels();
