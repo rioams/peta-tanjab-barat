@@ -286,7 +286,7 @@
       font-weight: 800;
       text-transform: uppercase;
       letter-spacing: 0.03em;
-      color: #ffe066;
+      color: #e879f9;
       text-shadow:
         0 0 4px #000, 0 0 8px #000,
         -1px -1px 2px #000,  1px -1px 2px #000,
@@ -296,6 +296,18 @@
       pointer-events: none;
       text-align: center;
       line-height: 1.2;
+    }
+    body.light-theme .kec-label-inner { color: #a21caf; }
+
+    /* ── Label desa versi kecil (dipakai saat zoom jauh, mode "Semua Kabupaten") ── */
+    .desa-label-inner.desa-mini {
+      font-size: 6px;
+      font-weight: 700;
+      opacity: 0.75;
+      letter-spacing: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     /* Loading */
@@ -426,7 +438,14 @@ const kecamatanDesaMap = {};
 let   currentViewMode  = 'all';      // 'all' | 'kecamatan'
 let   highlightKec     = '';         // kecamatan yang di-highlight
 let   showLabels       = true;
+let   currentTheme     = 'dark';     // 'dark' | 'light'
 const desaLabelMarkers = {};         // key -> L.marker label
+
+/* Warna garis batas kecamatan per tema — dipilih fuchsia/magenta terang agar
+   kontras jelas dari hijau (Baik), oranye/kuning (Sedang), merah (Buruk),
+   maupun biru (Belum diisi) yang sudah dipakai untuk status sinyal, sehingga
+   tidak tertukar secara visual. */
+const KEC_BOUNDARY_COLOR = { dark: '#e879f9', light: '#a21caf' };
 
 /* Batas & label kecamatan (mode "Semua Kabupaten") */
 const kecLabelMarkers  = {};         // kecamatan -> L.marker label
@@ -453,11 +472,13 @@ const baseTileLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z
 function makeKey(kec, desa) { return kec + '||' + desa; }
 
 function getStyle(status, dimmed) {
-  if (dimmed) return { color:'#1a2a3a', weight:0.5, fillColor:'#0d1b2a', fillOpacity:0.6 };
-  if (status === 'baik')   return { color:'#22c55e', weight:1.5, fillColor:'#22c55e', fillOpacity:0.5 };
-  if (status === 'sedang') return { color:'#f59e0b', weight:1.5, fillColor:'#f59e0b', fillOpacity:0.5 };
-  if (status === 'buruk')  return { color:'#ef4444', weight:1.5, fillColor:'#ef4444', fillOpacity:0.5 };
-  return { color:'#1a8cff', weight:1, fillColor:'#1a8cff', fillOpacity:0.18 };
+  /* Border desa dibuat lebih tebal & sedikit lebih gelap dari warna isi
+     agar garis pemisah antar desa/kelurahan lebih tegas dan mudah dilihat. */
+  if (dimmed) return { color:'#1a2a3a', weight:0.5, opacity:1, fillColor:'#0d1b2a', fillOpacity:0.6 };
+  if (status === 'baik')   return { color:'#15803d', weight:2.2, opacity:1, fillColor:'#22c55e', fillOpacity:0.5 };
+  if (status === 'sedang') return { color:'#b45309', weight:2.2, opacity:1, fillColor:'#f59e0b', fillOpacity:0.5 };
+  if (status === 'buruk')  return { color:'#b91c1c', weight:2.2, opacity:1, fillColor:'#ef4444', fillOpacity:0.5 };
+  return { color:'#1a8cff', weight:1.6, opacity:1, fillColor:'#1a8cff', fillOpacity:0.18 };
 }
 
 function makePopup(kec, desa, jenis, status) {
@@ -708,14 +729,14 @@ function createKecLabel(kec, geometry) {
     iconSize: [w, h],
     iconAnchor: [w / 2, h / 2]
   });
-  return L.marker(center, { icon, interactive: false, zIndexOffset: 800 });
+  return L.marker(center, { icon, interactive: false, zIndexOffset: 10000 });
 }
 
 function initKecamatanBoundariesAndLabels() {
   const kecData = buildKecamatanBoundaryData();
 
   kecBoundaryLayer = L.geoJSON(kecData, {
-    style: { color: '#ffe066', weight: 3, opacity: 0.85, fillOpacity: 0 },
+    style: { color: KEC_BOUNDARY_COLOR[currentTheme], weight: 3, opacity: 0.95, fillOpacity: 0 },
     interactive: false
   });
 
@@ -740,23 +761,85 @@ function showAllKecLabels() {
   Object.values(kecLabelMarkers).forEach(m => { if (!map.hasLayer(m)) m.addTo(map); });
 }
 
-/* Atur visibilitas label KECAMATAN & label DESA secara otomatis berdasarkan
-   level zoom (mode "Semua Kabupaten"). Batas kecamatan (garis tebal) tidak
-   terpengaruh — tetap tampil di semua level zoom.
-   - Zoom jauh (melihat seluruh/​sebagian besar kabupaten): hanya label
-     KECAMATAN yang tampil, label DESA disembunyikan agar tidak menumpuk
-     dan menutupi label kecamatan.
+/* Atur visibilitas & ukuran label KECAMATAN dan label DESA secara otomatis
+   berdasarkan level zoom (mode "Semua Kabupaten"). Batas kecamatan (garis
+   tebal) tidak terpengaruh — tetap tampil di semua level zoom.
+   - Zoom jauh (melihat seluruh/sebagian besar kabupaten): label KECAMATAN
+     tampil besar sebagai fokus utama, label DESA tetap ditampilkan namun
+     dalam ukuran kecil/redup (class "desa-mini") agar tetap ada tanpa
+     mendominasi atau menutupi nama kecamatan. Label kecamatan berada pada
+     zIndexOffset lebih tinggi dari label desa sehingga selalu tampil di
+     atas dan tidak akan tertimpa oleh label desa.
    - Zoom dekat (sudah fokus ke area tertentu): label KECAMATAN disembunyikan,
-     label DESA (sesuai toggle "Label Nama Desa") ditampilkan. */
+     label DESA (sesuai toggle "Label Nama Desa") ditampilkan ukuran normal. */
+let desaLabelsCurrentlyMini = false;
 function updateKecLabelVisibilityByZoom() {
   if (currentViewMode !== 'all') return;
-  if (map.getZoom() >= KEC_LABEL_HIDE_ZOOM) {
+  const zoomedIn = map.getZoom() >= KEC_LABEL_HIDE_ZOOM;
+
+  if (zoomedIn) {
     hideAllKecLabels();
-    if (showLabels) showAllDesaLabels(); else hideAllDesaLabels();
   } else {
     showAllKecLabels();
+  }
+
+  if (showLabels) {
+    showAllDesaLabels();
+    desaLabelsCurrentlyMini = !zoomedIn;
+    setDesaLabelsMini(desaLabelsCurrentlyMini);
+    declutterDesaLabels(desaLabelsCurrentlyMini);
+  } else {
     hideAllDesaLabels();
   }
+}
+
+/* Perkecil/redupkan (atau kembalikan ke ukuran normal) seluruh label desa
+   yang sedang tampil, tanpa perlu membuat ulang marker-nya. */
+function setDesaLabelsMini(mini) {
+  Object.values(desaLabelMarkers).forEach(m => {
+    const el = m.getElement && m.getElement();
+    if (!el) return;
+    const inner = el.querySelector('.desa-label-inner');
+    if (inner) inner.classList.toggle('desa-mini', mini);
+  });
+}
+
+/* Sembunyikan label desa yang posisinya di layar terlalu berdekatan satu
+   sama lain, atau terlalu dekat dengan titik label kecamatan, agar label
+   tidak saling menumpuk maupun menutupi nama kecamatan. Dipanggil ulang
+   setiap kali zoom/geser peta karena posisi layar berubah. */
+const DESA_MIN_GAP_PX = 30;   // jarak minimum antar label desa mini
+const KEC_MIN_GAP_PX  = 46;   // jarak minimum label desa mini dari titik label kecamatan
+function declutterDesaLabels(mini) {
+  if (!mini) {
+    // Ukuran normal (zoom dekat / highlight satu kecamatan): jumlah label
+    // jauh lebih sedikit dan tidak perlu di-declutter, tampilkan semua.
+    Object.values(desaLabelMarkers).forEach(m => {
+      const el = m.getElement && m.getElement();
+      if (el) el.style.visibility = '';
+    });
+    return;
+  }
+
+  const kecPoints = Object.values(kecLabelMarkers)
+    .filter(m => map.hasLayer(m))
+    .map(m => map.latLngToContainerPoint(m.getLatLng()));
+
+  const placed = [];
+  Object.values(desaLabelMarkers).forEach(m => {
+    if (!map.hasLayer(m)) return;
+    const el = m.getElement && m.getElement();
+    if (!el) return;
+    const pt = map.latLngToContainerPoint(m.getLatLng());
+    const tooCloseToKec   = kecPoints.some(kp => pt.distanceTo(kp) < KEC_MIN_GAP_PX);
+    const tooCloseToOther = placed.some(pp => pt.distanceTo(pp) < DESA_MIN_GAP_PX);
+    if (tooCloseToKec || tooCloseToOther) {
+      el.style.visibility = 'hidden';
+    } else {
+      el.style.visibility = '';
+      placed.push(pt);
+    }
+  });
 }
 
 function toggleLabels() {
@@ -873,6 +956,9 @@ initKecamatanBoundariesAndLabels();
 showKecBoundaries();
 updateKecLabelVisibilityByZoom();
 map.on('zoomend', updateKecLabelVisibilityByZoom);
+map.on('moveend', () => {
+  if (currentViewMode === 'all' && showLabels) declutterDesaLabels(desaLabelsCurrentlyMini);
+});
 
 /* ════════════════════════════════════════
    APPLY STATUS
@@ -1038,7 +1124,6 @@ window.addEventListener('load', () => {
 /* ════════════════════════════════════════
    TOGGLE TEMA (DARK / LIGHT MODE)
 ════════════════════════════════════════ */
-let currentTheme = 'dark';
 function toggleTheme() {
   currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
   document.body.classList.toggle('light-theme', currentTheme === 'light');
@@ -1047,6 +1132,7 @@ function toggleTheme() {
     ? 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
     : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
   baseTileLayer.setUrl(tileUrl);
+  if (kecBoundaryLayer) kecBoundaryLayer.setStyle({ color: KEC_BOUNDARY_COLOR[currentTheme] });
 }
 
 /* ════════════════════════════════════════
