@@ -7,9 +7,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mapbox/polylabel@2.0.0/polylabel.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
-  <!-- turf.js dipakai untuk menggabungkan (dissolve) batas desa/kelurahan menjadi batas kecamatan -->
-
+  <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -260,19 +258,44 @@
     }
     .desa-label-inner {
       font-family: 'Segoe UI', system-ui, sans-serif;
-      font-size: 9.5px;
+      font-size: 8px;
       font-weight: 800;
       color: #fff;
       text-shadow:
-        0 0 3px #000, 0 0 6px #000,
+        0 0 3px #000, 0 0 5px #000,
         -1px -1px 2px #000,  1px -1px 2px #000,
         -1px  1px 2px #000,  1px  1px 2px #000;
       white-space: normal;
       word-break: break-word;
       pointer-events: none;
       text-align: center;
-      line-height: 1.25;
+      line-height: 1.15;
       letter-spacing: 0.01em;
+    }
+
+    /* ── Label kecamatan di peta (lebih besar dari label desa) ── */
+    .kec-label {
+      background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+      z-index: 450 !important;
+    }
+    .kec-label-inner {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-size: 15px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      color: #ffe066;
+      text-shadow:
+        0 0 4px #000, 0 0 8px #000,
+        -1px -1px 2px #000,  1px -1px 2px #000,
+        -1px  1px 2px #000,  1px  1px 2px #000;
+      white-space: normal;
+      word-break: break-word;
+      pointer-events: none;
+      text-align: center;
+      line-height: 1.2;
     }
 
     /* Loading */
@@ -405,12 +428,15 @@ let   highlightKec     = '';         // kecamatan yang di-highlight
 let   showLabels       = true;
 const desaLabelMarkers = {};         // key -> L.marker label
 
-/* State untuk auto-switch level kecamatan <-> desa pada mode "Semua Kabupaten" */
-let   kecGeoLayer         = null;    // layer L.geoJSON batas kecamatan (hasil dissolve)
-const kecLayerMap         = {};      // nama kecamatan -> array layer batas kecamatan
-const kecLabelMarkers     = {};      // nama kecamatan -> L.marker label kecamatan
-let   currentDisplayLevel = 'kecamatan'; // 'kecamatan' | 'desa' — level yang sedang tampil di mode "all"
-const ZOOM_SWITCH_THRESHOLD = 11;    // di atas zoom ini -> tampilkan level desa/kelurahan
+/* Batas & label kecamatan (mode "Semua Kabupaten") */
+const kecLabelMarkers  = {};         // kecamatan -> L.marker label
+let   kecBoundaryLayer = null;       // layer garis tebal batas kecamatan
+/* Ambang zoom (mode "Semua Kabupaten"): di atas nilai ini (lebih dekat/zoom-in)
+   label KECAMATAN disembunyikan dan label DESA ditampilkan; di bawah/​sama dengan
+   nilai ini (tampilan lebih jauh/menyeluruh) label KECAMATAN tampil dan label DESA
+   disembunyikan. Keduanya dibuat saling eksklusif agar ratusan label desa tidak
+   menumpuk & menutupi label kecamatan saat peta masih menampilkan seluruh kabupaten. */
+const KEC_LABEL_HIDE_ZOOM = 12;
 
 
 /* ════════════════════════════════════════
@@ -538,9 +564,8 @@ function ringCentroid(ring) {
   return [cx / (6 * A), cy / (6 * A)];
 }
 
-function getPolygonCenter(layer) {
+function getGeomCenter(geom) {
   try {
-    const geom = layer.feature.geometry;
     // Kumpulkan semua polygon (Polygon → 1, MultiPolygon → banyak)
     const polys = geom.type === 'Polygon'
       ? [geom.coordinates]
@@ -570,16 +595,22 @@ function getPolygonCenter(layer) {
     const [lng, lat] = ringCentroid(bestRing);
     return L.latLng(lat, lng);
   } catch(e) {
-    try { return layer.getBounds().getCenter(); } catch(_) { return null; }
+    return null;
   }
+}
+
+function getPolygonCenter(layer) {
+  const center = getGeomCenter(layer.feature.geometry);
+  if (center) return center;
+  try { return layer.getBounds().getCenter(); } catch(_) { return null; }
 }
 
 function createDesaLabel(layer, desa) {
   const center = getPolygonCenter(layer);
   if (!center) return null;
   // Estimasi lebar teks agar bisa di-center dengan tepat
-  const charW = 5.5, h = 14;
-  const w = Math.max(desa.length * charW, 40);
+  const charW = 4.6, h = 12;
+  const w = Math.max(desa.length * charW, 34);
   const icon = L.divIcon({
     className: 'desa-label',
     html: `<div class="desa-label-inner" style="width:${w}px">${desa}</div>`,
@@ -611,11 +642,131 @@ function hideAllDesaLabels() {
   Object.values(desaLabelMarkers).forEach(m => { if (map.hasLayer(m)) map.removeLayer(m); });
 }
 
+/* Tampilkan label seluruh desa/kelurahan se-kabupaten (dipakai di mode "Semua Kabupaten") */
+function showAllDesaLabels() {
+  if (!showLabels) return;
+  GEOJSON_DATA.features.forEach(f => {
+    const p     = f.properties;
+    const key   = makeKey(p.kecamatan, p.kel_desa);
+    const layer = layerMap[key];
+    if (!layer) return;
+    if (desaLabelMarkers[key]) {
+      if (!map.hasLayer(desaLabelMarkers[key])) desaLabelMarkers[key].addTo(map);
+    } else {
+      const m = createDesaLabel(layer, p.kel_desa);
+      if (m) { desaLabelMarkers[key] = m; m.addTo(map); }
+    }
+  });
+}
+
+/* ════════════════════════════════════════
+   BATAS & LABEL KECAMATAN (mode "Semua Kabupaten")
+   Batas kecamatan dibuat dengan men-dissolve (union) seluruh
+   polygon desa yang satu kecamatan, sehingga hanya garis luar
+   kecamatan yang tebal — batas antar-desa dalam kecamatan yang
+   sama tidak ikut menebal.
+════════════════════════════════════════ */
+function buildKecamatanBoundaryData() {
+  const groups = {};
+  GEOJSON_DATA.features.forEach(f => {
+    const kec = f.properties.kecamatan;
+    if (!groups[kec]) groups[kec] = [];
+    groups[kec].push(f);
+  });
+
+  const dissolved = [];
+  Object.keys(groups).forEach(kec => {
+    const feats = groups[kec];
+    let merged = feats[0];
+    for (let i = 1; i < feats.length; i++) {
+      try {
+        const u = (typeof turf !== 'undefined') ? turf.union(merged, feats[i]) : null;
+        if (u) merged = u;
+      } catch (e) {
+        // Jika union gagal (geometri tidak valid dsb.), lewati — bentuk kecamatan
+        // tetap merepresentasikan gabungan sebagian besar desa yang berhasil di-union.
+      }
+    }
+    dissolved.push({
+      type: 'Feature',
+      properties: { kecamatan: kec },
+      geometry: merged.geometry || merged.features?.[0]?.geometry
+    });
+  });
+
+  return { type: 'FeatureCollection', features: dissolved };
+}
+
+function createKecLabel(kec, geometry) {
+  const center = getGeomCenter(geometry);
+  if (!center) return null;
+  const charW = 8, h = 20;
+  const w = Math.max(kec.length * charW, 60);
+  const icon = L.divIcon({
+    className: 'kec-label',
+    html: `<div class="kec-label-inner" style="width:${w}px">${kec}</div>`,
+    iconSize: [w, h],
+    iconAnchor: [w / 2, h / 2]
+  });
+  return L.marker(center, { icon, interactive: false, zIndexOffset: 800 });
+}
+
+function initKecamatanBoundariesAndLabels() {
+  const kecData = buildKecamatanBoundaryData();
+
+  kecBoundaryLayer = L.geoJSON(kecData, {
+    style: { color: '#ffe066', weight: 3, opacity: 0.85, fillOpacity: 0 },
+    interactive: false
+  });
+
+  kecData.features.forEach(f => {
+    const kec = f.properties.kecamatan;
+    if (!f.geometry) return;
+    const m = createKecLabel(kec, f.geometry);
+    if (m) kecLabelMarkers[kec] = m;
+  });
+}
+
+function showKecBoundaries() {
+  if (kecBoundaryLayer && !map.hasLayer(kecBoundaryLayer)) kecBoundaryLayer.addTo(map);
+}
+function hideKecBoundaries() {
+  if (kecBoundaryLayer && map.hasLayer(kecBoundaryLayer)) map.removeLayer(kecBoundaryLayer);
+}
+function hideAllKecLabels() {
+  Object.values(kecLabelMarkers).forEach(m => { if (map.hasLayer(m)) map.removeLayer(m); });
+}
+function showAllKecLabels() {
+  Object.values(kecLabelMarkers).forEach(m => { if (!map.hasLayer(m)) m.addTo(map); });
+}
+
+/* Atur visibilitas label KECAMATAN & label DESA secara otomatis berdasarkan
+   level zoom (mode "Semua Kabupaten"). Batas kecamatan (garis tebal) tidak
+   terpengaruh — tetap tampil di semua level zoom.
+   - Zoom jauh (melihat seluruh/​sebagian besar kabupaten): hanya label
+     KECAMATAN yang tampil, label DESA disembunyikan agar tidak menumpuk
+     dan menutupi label kecamatan.
+   - Zoom dekat (sudah fokus ke area tertentu): label KECAMATAN disembunyikan,
+     label DESA (sesuai toggle "Label Nama Desa") ditampilkan. */
+function updateKecLabelVisibilityByZoom() {
+  if (currentViewMode !== 'all') return;
+  if (map.getZoom() >= KEC_LABEL_HIDE_ZOOM) {
+    hideAllKecLabels();
+    if (showLabels) showAllDesaLabels(); else hideAllDesaLabels();
+  } else {
+    showAllKecLabels();
+    hideAllDesaLabels();
+  }
+}
+
 function toggleLabels() {
   showLabels = document.getElementById('toggle-label').checked;
   if (currentViewMode === 'kecamatan' && highlightKec) {
     if (showLabels) showDesaLabelsForKec(highlightKec);
     else hideAllDesaLabels();
+  } else if (currentViewMode === 'all') {
+    // Biarkan logika zoom yang memutuskan, dengan tetap menghormati toggle ini
+    updateKecLabelVisibilityByZoom();
   }
 }
 
@@ -633,7 +784,6 @@ function setViewMode(mode) {
   if (mode === 'all') {
     // Reset semua ke tampilan normal
     highlightKec = '';
-    hideAllDesaLabels();
     geoLayer.eachLayer(layer => {
       const p = layer.feature.properties;
       layer.setStyle(getStyle(statusMap[makeKey(p.kecamatan, p.kel_desa)], false));
@@ -643,13 +793,14 @@ function setViewMode(mode) {
     document.getElementById('search-input').value = '';
     const suggBoxEl = document.getElementById('search-suggestions');
     if (suggBoxEl) { suggBoxEl.classList.remove('show'); suggBoxEl.innerHTML = ''; }
+    // Tampilkan batas kecamatan (tebal); label desa & kecamatan diatur otomatis sesuai level zoom
+    showKecBoundaries();
+    updateKecLabelVisibilityByZoom();
   } else {
-    // Mode highlight — selalu tampilkan level desa/kelurahan, non-aktifkan layer kecamatan
-    if (kecGeoLayer && map.hasLayer(kecGeoLayer)) map.removeLayer(kecGeoLayer);
+    // Mode highlight — sembunyikan lapisan khusus mode "Semua Kabupaten"
+    hideKecBoundaries();
     hideAllKecLabels();
-    if (!map.hasLayer(geoLayer)) geoLayer.addTo(map);
-    currentDisplayLevel = 'desa';
-    // Mode highlight — terapkan kecamatan yang sudah dipilih (jika ada)
+    hideAllDesaLabels();
     applyHighlight(highlightKec);
   }
 }
@@ -711,145 +862,17 @@ const geoLayer = L.geoJSON(GEOJSON_DATA, {
       }
     });
   }
-});
+}).addTo(map);
 
 map.fitBounds(geoLayer.getBounds(), { padding:[20,20] });
 
-/* ════════════════════════════════════════
-   LAYER KECAMATAN (hasil dissolve batas desa/kelurahan)
-════════════════════════════════════════ */
-function buildKecamatanFeatureCollection() {
-  const features = [];
-  Object.keys(kecamatanDesaMap).forEach(kec => {
-    const feats = GEOJSON_DATA.features.filter(f => f.properties.kecamatan === kec);
-    let merged = null;
-    const leftover = [];
-    feats.forEach(f => {
-      if (!merged) { merged = JSON.parse(JSON.stringify(f)); return; }
-      try {
-        const u = turf.union(merged, f);
-        if (u) merged = u; else leftover.push(f);
-      } catch (e) {
-        // Geometri tidak valid untuk digabung — sertakan apa adanya agar tidak hilang dari peta
-        leftover.push(f);
-      }
-    });
-    if (merged) {
-      merged.properties = { kecamatan: kec };
-      features.push(merged);
-    }
-    leftover.forEach(f => {
-      const clone = JSON.parse(JSON.stringify(f));
-      clone.properties = { kecamatan: kec };
-      features.push(clone);
-    });
-  });
-  return { type: 'FeatureCollection', features };
-}
-
-/* Status kecamatan = status terburuk di antara desa/kelurahan anggotanya */
-function getKecStatus(kec) {
-  const desas = kecamatanDesaMap[kec] || [];
-  let hasBuruk = false, hasSedang = false, hasBaik = false;
-  desas.forEach(d => {
-    const s = statusMap[makeKey(kec, d)];
-    if (s === 'buruk') hasBuruk = true;
-    else if (s === 'sedang') hasSedang = true;
-    else if (s === 'baik') hasBaik = true;
-  });
-  if (hasBuruk) return 'buruk';
-  if (hasSedang) return 'sedang';
-  if (hasBaik) return 'baik';
-  return null;
-}
-
-function refreshKecStyles() {
-  Object.keys(kecLayerMap).forEach(kec => {
-    const st = getStyle(getKecStatus(kec), false);
-    kecLayerMap[kec].forEach(l => l.setStyle(st));
-  });
-}
-
-const kecamatanGeoJSON = buildKecamatanFeatureCollection();
-kecGeoLayer = L.geoJSON(kecamatanGeoJSON, {
-  style: f => getStyle(getKecStatus(f.properties.kecamatan), false),
-  onEachFeature: (feature, layer) => {
-    const kec = feature.properties.kecamatan;
-    if (!kecLayerMap[kec]) kecLayerMap[kec] = [];
-    kecLayerMap[kec].push(layer);
-    layer.bindPopup(`<div class="popup-title">Kec. ${kec}</div>`, { maxWidth: 220 });
-    layer.on({
-      mouseover(e) {
-        e.target.setStyle({ weight: 3, fillOpacity: 0.62 });
-        layer.bringToFront();
-      },
-      mouseout() {
-        kecLayerMap[kec].forEach(l => l.setStyle(getStyle(getKecStatus(kec), false)));
-      },
-      click(e) {
-        if (currentViewMode !== 'all') return;
-        map.fitBounds(e.target.getBounds(), { padding:[20,20] });
-        map.once('moveend', () => {
-          if (map.getZoom() <= ZOOM_SWITCH_THRESHOLD) map.setZoom(ZOOM_SWITCH_THRESHOLD + 1);
-        });
-      }
-    });
-  }
-});
-
-/* ════════════════════════════════════════
-   LABEL AREA — dipakai di mode "Semua Kabupaten"
-════════════════════════════════════════ */
-function showAllKecLabels() {
-  Object.keys(kecLayerMap).forEach(kec => {
-    if (kecLabelMarkers[kec]) { kecLabelMarkers[kec].addTo(map); return; }
-    const m = createDesaLabel(kecLayerMap[kec][0], kec);
-    if (m) { kecLabelMarkers[kec] = m; m.addTo(map); }
-  });
-}
-function hideAllKecLabels() {
-  Object.values(kecLabelMarkers).forEach(m => { if (map.hasLayer(m)) map.removeLayer(m); });
-}
-function showAllDesaLabels() {
-  GEOJSON_DATA.features.forEach(f => {
-    const p   = f.properties;
-    const key = makeKey(p.kecamatan, p.kel_desa);
-    const layer = layerMap[key];
-    if (!layer) return;
-    if (desaLabelMarkers[key]) { desaLabelMarkers[key].addTo(map); return; }
-    const m = createDesaLabel(layer, p.kel_desa);
-    if (m) { desaLabelMarkers[key] = m; m.addTo(map); }
-  });
-}
-
-/* ════════════════════════════════════════
-   AUTO SWITCH KECAMATAN <-> DESA (mode "Semua Kabupaten")
-════════════════════════════════════════ */
-function updateAllModeDisplay() {
-  if (currentViewMode !== 'all') return;
-  const shouldShowDesa = map.getZoom() > ZOOM_SWITCH_THRESHOLD;
-
-  if (shouldShowDesa && currentDisplayLevel !== 'desa') {
-    if (map.hasLayer(kecGeoLayer)) map.removeLayer(kecGeoLayer);
-    hideAllKecLabels();
-    if (!map.hasLayer(geoLayer)) geoLayer.addTo(map);
-    showAllDesaLabels();
-    currentDisplayLevel = 'desa';
-  } else if (!shouldShowDesa && currentDisplayLevel !== 'kecamatan') {
-    if (map.hasLayer(geoLayer)) map.removeLayer(geoLayer);
-    hideAllDesaLabels();
-    if (!map.hasLayer(kecGeoLayer)) kecGeoLayer.addTo(map);
-    showAllKecLabels();
-    currentDisplayLevel = 'kecamatan';
-  }
-}
-
-map.on('moveend', updateAllModeDisplay);
-
-/* Tampilan awal saat halaman dibuka: mode "Semua Kabupaten", zoom terluar -> level kecamatan */
-kecGeoLayer.addTo(map);
-showAllKecLabels();
-currentDisplayLevel = 'kecamatan';
+/* Inisialisasi batas & label kecamatan, lalu tampilkan untuk mode awal "Semua Kabupaten".
+   Label desa TIDAK langsung ditampilkan di sini — updateKecLabelVisibilityByZoom()
+   yang akan menentukan label desa/kecamatan mana yang tampil sesuai level zoom awal. */
+initKecamatanBoundariesAndLabels();
+showKecBoundaries();
+updateKecLabelVisibilityByZoom();
+map.on('zoomend', updateKecLabelVisibilityByZoom);
 
 /* ════════════════════════════════════════
    APPLY STATUS
@@ -865,10 +888,6 @@ function applyStatus(kec, desa, status) {
   const feat = GEOJSON_DATA.features.find(f => f.properties.kecamatan===kec && f.properties.kel_desa===desa);
   layer.setPopupContent(makePopup(kec, desa, feat ? feat.properties.jenis_kd : 'Desa', status));
   if (currentViewMode==='kecamatan' && kec===highlightKec) updateKecInfo(kec);
-  if (kecLayerMap[kec]) {
-    const st = getStyle(getKecStatus(kec), false);
-    kecLayerMap[kec].forEach(l => l.setStyle(st));
-  }
   return true;
 }
 
@@ -885,7 +904,6 @@ document.getElementById('btn-reset')?.addEventListener('click', () => {
     layer.setStyle(getStyle(null, dimmed));
     layer.setPopupContent(makePopup(p.kecamatan, p.kel_desa, p.jenis_kd, null));
   });
-  refreshKecStyles();
   updateStats();
   if (currentViewMode==='kecamatan' && highlightKec) updateKecInfo(highlightKec);
   showMsg('✓ Semua data direset.', '#f59e0b');
@@ -959,7 +977,6 @@ async function syncFromSheet() {
       if (ok) updated++; else notFound++;
     }
 
-    refreshKecStyles();
     updateStats();
     if (currentViewMode==='kecamatan' && highlightKec) updateKecInfo(highlightKec);
     if (currentViewMode==='kecamatan' && highlightKec && showLabels) showDesaLabelsForKec(highlightKec);
@@ -1084,12 +1101,6 @@ function selectDesa(item) {
   searchInput.value = item.desa;
   const layer = layerMap[item.key];
   if (!layer) return;
-  // Pastikan level desa/kelurahan yang aktif ditampilkan agar popup & highlight terlihat
-  if (map.hasLayer(kecGeoLayer)) map.removeLayer(kecGeoLayer);
-  hideAllKecLabels();
-  if (!map.hasLayer(geoLayer)) geoLayer.addTo(map);
-  showAllDesaLabels();
-  currentDisplayLevel = 'desa';
   resetMapHighlight();
   layer.setStyle({ ...getStyle(statusMap[item.key], false), weight:3.5, fillOpacity:0.9 });
   layer.bringToFront();
