@@ -4,18 +4,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Peta Sinyal Kabupaten Tanjung Jabung Barat</title>
-  <script>
-    // Terapkan tema sedini mungkin agar tidak "flash" saat halaman dimuat
-    (function() {
-      try {
-        var saved = localStorage.getItem('peta-sinyal-theme');
-        if (saved === 'light') document.documentElement.setAttribute('data-theme', 'light');
-      } catch(e) {}
-    })();
-  </script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mapbox/polylabel@2.0.0/polylabel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+  <!-- turf.js dipakai untuk menggabungkan (dissolve) batas desa/kelurahan menjadi batas kecamatan -->
+
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -32,103 +26,21 @@
       --input-bg:    #0d1b2a;
       --shadow:      0 4px 24px rgba(0,0,0,0.45);
     }
-
-    /* ── Light Mode ── */
-    :root[data-theme="light"] {
-      --bg-dark:     #f2f5fa;
+    body.light-theme {
+      --bg-dark:     #eef3f9;
       --panel-bg:    #ffffff;
-      --panel-border:#dce4ee;
-      --accent:      #1a6fd6;
-      --accent-light:#2f8ae0;
-      --text-main:   #1c2b3a;
-      --text-muted:  #5b7186;
+      --panel-border:#d7e3f0;
+      --accent:      #1a73e8;
+      --accent-light:#3b8bff;
+      --text-main:   #16263b;
+      --text-muted:  #5c7690;
       --good:        #16a34a;
       --medium:      #d97706;
       --bad:         #dc2626;
-      --input-bg:    #f7f9fc;
-      --shadow:      0 4px 24px rgba(20,40,70,0.12);
+      --input-bg:    #f3f7fc;
+      --shadow:      0 4px 20px rgba(16,35,59,0.14);
     }
-    :root[data-theme="light"] body { background: var(--bg-dark); }
-    :root[data-theme="light"] #map { background: #dbe4ee; }
-    :root[data-theme="light"] .leaflet-popup-content-wrapper { background: #ffffff; border-color: #dce4ee; color: #1c2b3a; }
-    :root[data-theme="light"] .leaflet-popup-tip { background: #ffffff; }
-    :root[data-theme="light"] .leaflet-popup-close-button { color: #5b7186 !important; }
-    :root[data-theme="light"] .popup-row { color: #3a4c5e; }
-    :root[data-theme="light"] .popup-row span { color: #1c2b3a; }
-    :root[data-theme="light"] .hl-kec-select option,
-    :root[data-theme="light"] .form-group select option { background: #ffffff; color: #1c2b3a; }
-    :root[data-theme="light"] .desa-label-inner {
-      color: #16324f;
-      text-shadow:
-        0 0 3px #fff, 0 0 6px #fff,
-        -1px -1px 2px #fff,  1px -1px 2px #fff,
-        -1px  1px 2px #fff,  1px  1px 2px #fff;
-    }
-    :root[data-theme="light"] #loading-overlay { background: rgba(242,245,250,0.9); }
-
-    /* ── Theme Toggle Button ── */
-    #theme-toggle {
-      position: fixed;
-      top: 14px;
-      right: 14px;
-      z-index: 9999;
-      width: 46px; height: 46px;
-      background: var(--panel-bg);
-      border: 1px solid var(--panel-border);
-      border-radius: 10px;
-      cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 20px;
-      color: var(--text-main);
-      box-shadow: var(--shadow);
-      transition: background 0.2s, transform 0.15s, border-color 0.2s;
-      -webkit-tap-highlight-color: transparent;
-      touch-action: manipulation;
-    }
-    #theme-toggle:hover  { border-color: var(--accent); }
-    #theme-toggle:active { transform: scale(0.92); }
-    @media (max-width: 640px) {
-      #theme-toggle { width: 44px; height: 44px; font-size: 18px; top: 12px; right: 12px; }
-    }
-
-    /* ── Search Autocomplete ── */
-    .search-wrap { position: relative; }
-    .search-results {
-      position: absolute;
-      top: calc(100% + 4px);
-      left: 0; right: 0;
-      background: var(--panel-bg);
-      border: 1px solid var(--panel-border);
-      border-radius: 8px;
-      box-shadow: var(--shadow);
-      max-height: 260px;
-      overflow-y: auto;
-      z-index: 600;
-      display: none;
-    }
-    .search-results.show { display: block; }
-    .search-result-item {
-      padding: 9px 12px;
-      cursor: pointer;
-      border-bottom: 1px solid var(--panel-border);
-      transition: background 0.15s;
-    }
-    .search-result-item:last-child { border-bottom: none; }
-    .search-result-item:hover,
-    .search-result-item.active {
-      background: rgba(26,140,255,0.12);
-    }
-    .search-result-name { font-size: 13px; font-weight: 700; color: var(--text-main); }
-    .search-result-kec { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
-    .search-result-name mark {
-      background: rgba(26,140,255,0.35);
-      color: inherit;
-      border-radius: 2px;
-      padding: 0 1px;
-    }
-    .search-no-result { padding: 10px 12px; font-size: 12px; color: var(--text-muted); text-align: center; }
-
-    html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg-dark); color: var(--text-main); overflow: hidden; transition: background 0.2s, color 0.2s; }
+    html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg-dark); color: var(--text-main); overflow: hidden; transition: background 0.25s, color 0.25s; }
     #app { display: flex; height: 100vh; position: relative; overflow: hidden; }
 
     /* ── Sidebar ── */
@@ -209,9 +121,28 @@
       .slider:before { width: 18px; height: 18px; }
       input:checked + .slider:before { transform: translateX(20px); }
     }
-    #sidebar-header { padding: 16px 16px 10px 68px; border-bottom: 1px solid var(--panel-border); background: linear-gradient(135deg, #0d1b2a 0%, #1a2f4a 100%); min-height: 46px; display: flex; flex-direction: column; justify-content: center; }
+    #sidebar-header { position: relative; padding: 16px 52px 10px 68px; border-bottom: 1px solid var(--panel-border); background: linear-gradient(135deg, #0d1b2a 0%, #1a2f4a 100%); min-height: 46px; display: flex; flex-direction: column; justify-content: center; }
+    body.light-theme #sidebar-header { background: linear-gradient(135deg, #dfe9f5 0%, #eef4fb 100%); }
     #sidebar-header h1 { font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent-light); margin-bottom: 2px; }
     #sidebar-header p { font-size: 11px; color: var(--text-muted); }
+    body.light-theme #sidebar-header h1 { color: var(--accent); }
+
+    /* ── Toggle Tema ── */
+    .theme-toggle-btn {
+      position: absolute; top: 12px; right: 12px;
+      width: 32px; height: 32px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.2);
+      background: rgba(255,255,255,0.08);
+      color: #fff;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 15px;
+      transition: all 0.2s;
+    }
+    .theme-toggle-btn:hover { background: rgba(255,255,255,0.18); }
+    body.light-theme .theme-toggle-btn { border-color: var(--panel-border); background: rgba(0,0,0,0.05); color: var(--text-main); }
+    body.light-theme .theme-toggle-btn:hover { background: rgba(0,0,0,0.1); }
     #sidebar-body { flex: 1; overflow-y: auto; padding: 12px; scrollbar-width: thin; scrollbar-color: var(--panel-border) transparent; }
 
     /* ── View Mode Toggle ── */
@@ -227,7 +158,7 @@
     /* ── Highlight Kecamatan Panel ── */
     .hl-kec-select { width: 100%; padding: 8px 10px; background: var(--input-bg); border: 1px solid var(--panel-border); border-radius: 6px; color: var(--text-main); font-size: 13px; outline: none; margin-bottom: 8px; transition: border-color 0.2s; }
     .hl-kec-select:focus { border-color: var(--accent); }
-    .hl-kec-select option { background: #0d1b2a; }
+    .hl-kec-select option { background: var(--panel-bg); color: var(--text-main); }
 
     /* Label toggle */
     .toggle-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
@@ -250,7 +181,35 @@
     .form-group label { display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 4px; }
     .form-group select, .form-group input { width: 100%; padding: 8px 10px; background: var(--input-bg); border: 1px solid var(--panel-border); border-radius: 6px; color: var(--text-main); font-size: 13px; outline: none; transition: border-color 0.2s; }
     .form-group select:focus, .form-group input:focus { border-color: var(--accent); }
-    .form-group select option { background: #0d1b2a; }
+    .form-group select option { background: var(--panel-bg); color: var(--text-main); }
+
+    /* ── Autocomplete Pencarian ── */
+    .search-suggestions {
+      position: absolute;
+      top: 100%; left: 0; right: 0;
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      border-radius: 7px;
+      margin-top: 4px;
+      max-height: 240px;
+      overflow-y: auto;
+      z-index: 60;
+      box-shadow: var(--shadow);
+      display: none;
+    }
+    .search-suggestions.show { display: block; }
+    .search-suggestion-item {
+      padding: 8px 10px;
+      font-size: 12.5px;
+      color: var(--text-main);
+      cursor: pointer;
+      border-bottom: 1px solid var(--panel-border);
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    }
+    .search-suggestion-item:last-child { border-bottom: none; }
+    .search-suggestion-item:hover, .search-suggestion-item.active { background: rgba(26,140,255,0.14); }
+    .search-suggestion-item .sugg-kec { color: var(--text-muted); font-size: 10.5px; white-space: nowrap; flex-shrink: 0; }
+    .search-suggestion-empty { padding: 10px; font-size: 12px; color: var(--text-muted); text-align: center; }
 
     /* Google Spreadsheet section */
     .import-section { background: rgba(26,140,255,0.08); border: 1px dashed var(--accent); border-radius: 8px; padding: 10px; margin-bottom: 12px; }
@@ -281,12 +240,12 @@
     #map { flex: 1; height: 100vh; background: #0d1b2a; }
 
     /* Popup */
-    .leaflet-popup-content-wrapper { background: #132033; border: 1px solid #1e3a5f; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); color: #e0eaf5; }
-    .leaflet-popup-tip { background: #132033; }
-    .leaflet-popup-close-button { color: #7a9abf !important; }
-    .popup-title { font-size: 14px; font-weight: 700; color: #4da6ff; margin-bottom: 5px; }
-    .popup-row { font-size: 12px; margin-bottom: 3px; color: #b0c8e0; }
-    .popup-row span { font-weight: 600; color: #e0eaf5; }
+    .leaflet-popup-content-wrapper { background: var(--panel-bg); border: 1px solid var(--panel-border); border-radius: 8px; box-shadow: var(--shadow); color: var(--text-main); }
+    .leaflet-popup-tip { background: var(--panel-bg); }
+    .leaflet-popup-close-button { color: var(--text-muted) !important; }
+    .popup-title { font-size: 14px; font-weight: 700; color: var(--accent-light); margin-bottom: 5px; }
+    .popup-row { font-size: 12px; margin-bottom: 3px; color: var(--text-muted); }
+    .popup-row span { font-weight: 600; color: var(--text-main); }
     .popup-status { display: inline-block; margin-top: 5px; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 700; }
     .status-baik   { background: rgba(34,197,94,0.2);  color: #4ade80; border: 1px solid #22c55e; }
     .status-sedang { background: rgba(245,158,11,0.2); color: #fbbf24; border: 1px solid #f59e0b; }
@@ -329,6 +288,9 @@
 <div id="app">
   <aside id="sidebar">
     <div id="sidebar-header">
+      <button class="theme-toggle-btn" id="theme-toggle" onclick="toggleTheme()" title="Ganti Mode Gelap/Terang" aria-label="Ganti tema gelap/terang">
+        <span id="theme-icon">&#127769;</span>
+      </button>
       <h1>&#128506;&#65039; Peta Sinyal</h1>
       <p>Kabupaten Tanjung Jabung Barat</p>
     </div>
@@ -343,10 +305,10 @@
 
       <!-- PANEL: MODE SEMUA -->
       <div class="mode-panel active" id="panel-all">
-        <div class="form-group search-wrap">
+        <div class="form-group" style="position:relative;">
           <label>&#128269; Cari Desa / Kelurahan</label>
           <input type="text" id="search-input" placeholder="Ketik nama desa..." autocomplete="off" />
-          <div id="search-results" class="search-results"></div>
+          <div id="search-suggestions" class="search-suggestions"></div>
         </div>
       </div>
 
@@ -413,8 +375,6 @@
   </aside>
   <!-- Tombol toggle sidebar -->
   <button id="sidebar-toggle" onclick="toggleSidebar()" title="Sembunyikan / Tampilkan Menu">&#9776;</button>
-  <!-- Tombol toggle tema terang/gelap -->
-  <button id="theme-toggle" onclick="toggleTheme()" title="Ganti Tema Terang/Gelap">&#127769;</button>
   <!-- Overlay gelap saat sidebar terbuka di mobile -->
   <div id="map-overlay" onclick="toggleSidebar()"></div>
   <div id="map"></div>
@@ -445,12 +405,21 @@ let   highlightKec     = '';         // kecamatan yang di-highlight
 let   showLabels       = true;
 const desaLabelMarkers = {};         // key -> L.marker label
 
+/* State untuk auto-switch level kecamatan <-> desa pada mode "Semua Kabupaten" */
+let   kecGeoLayer         = null;    // layer L.geoJSON batas kecamatan (hasil dissolve)
+const kecLayerMap         = {};      // nama kecamatan -> array layer batas kecamatan
+const kecLabelMarkers     = {};      // nama kecamatan -> L.marker label kecamatan
+let   currentDisplayLevel = 'kecamatan'; // 'kecamatan' | 'desa' — level yang sedang tampil di mode "all"
+const ZOOM_SWITCH_THRESHOLD = 11;    // di atas zoom ini -> tampilkan level desa/kelurahan
+
 
 /* ════════════════════════════════════════
    MAP INIT
 ════════════════════════════════════════ */
 const map = L.map('map', { zoomControl: true, attributionControl: false });
-// Tile layer akan ditambahkan secara dinamis oleh initTheme() sesuai tema aktif
+const baseTileLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  maxZoom: 19, subdomains:'abcd'
+}).addTo(map);
 
 /* ════════════════════════════════════════
    STYLE HELPERS
@@ -672,8 +641,14 @@ function setViewMode(mode) {
     map.fitBounds(geoLayer.getBounds(), { padding:[20,20] });
     // Reset search
     document.getElementById('search-input').value = '';
-    if (typeof closeSearchResults === 'function') closeSearchResults();
+    const suggBoxEl = document.getElementById('search-suggestions');
+    if (suggBoxEl) { suggBoxEl.classList.remove('show'); suggBoxEl.innerHTML = ''; }
   } else {
+    // Mode highlight — selalu tampilkan level desa/kelurahan, non-aktifkan layer kecamatan
+    if (kecGeoLayer && map.hasLayer(kecGeoLayer)) map.removeLayer(kecGeoLayer);
+    hideAllKecLabels();
+    if (!map.hasLayer(geoLayer)) geoLayer.addTo(map);
+    currentDisplayLevel = 'desa';
     // Mode highlight — terapkan kecamatan yang sudah dipilih (jika ada)
     applyHighlight(highlightKec);
   }
@@ -704,7 +679,7 @@ function applyHighlight(kec) {
   }
 }
 
-document.getElementById('hl-kec-select').addEventListener('change', function() {
+document.getElementById('hl-kec-select')?.addEventListener('change', function() {
   applyHighlight(this.value);
 });
 
@@ -736,9 +711,145 @@ const geoLayer = L.geoJSON(GEOJSON_DATA, {
       }
     });
   }
-}).addTo(map);
+});
 
 map.fitBounds(geoLayer.getBounds(), { padding:[20,20] });
+
+/* ════════════════════════════════════════
+   LAYER KECAMATAN (hasil dissolve batas desa/kelurahan)
+════════════════════════════════════════ */
+function buildKecamatanFeatureCollection() {
+  const features = [];
+  Object.keys(kecamatanDesaMap).forEach(kec => {
+    const feats = GEOJSON_DATA.features.filter(f => f.properties.kecamatan === kec);
+    let merged = null;
+    const leftover = [];
+    feats.forEach(f => {
+      if (!merged) { merged = JSON.parse(JSON.stringify(f)); return; }
+      try {
+        const u = turf.union(merged, f);
+        if (u) merged = u; else leftover.push(f);
+      } catch (e) {
+        // Geometri tidak valid untuk digabung — sertakan apa adanya agar tidak hilang dari peta
+        leftover.push(f);
+      }
+    });
+    if (merged) {
+      merged.properties = { kecamatan: kec };
+      features.push(merged);
+    }
+    leftover.forEach(f => {
+      const clone = JSON.parse(JSON.stringify(f));
+      clone.properties = { kecamatan: kec };
+      features.push(clone);
+    });
+  });
+  return { type: 'FeatureCollection', features };
+}
+
+/* Status kecamatan = status terburuk di antara desa/kelurahan anggotanya */
+function getKecStatus(kec) {
+  const desas = kecamatanDesaMap[kec] || [];
+  let hasBuruk = false, hasSedang = false, hasBaik = false;
+  desas.forEach(d => {
+    const s = statusMap[makeKey(kec, d)];
+    if (s === 'buruk') hasBuruk = true;
+    else if (s === 'sedang') hasSedang = true;
+    else if (s === 'baik') hasBaik = true;
+  });
+  if (hasBuruk) return 'buruk';
+  if (hasSedang) return 'sedang';
+  if (hasBaik) return 'baik';
+  return null;
+}
+
+function refreshKecStyles() {
+  Object.keys(kecLayerMap).forEach(kec => {
+    const st = getStyle(getKecStatus(kec), false);
+    kecLayerMap[kec].forEach(l => l.setStyle(st));
+  });
+}
+
+const kecamatanGeoJSON = buildKecamatanFeatureCollection();
+kecGeoLayer = L.geoJSON(kecamatanGeoJSON, {
+  style: f => getStyle(getKecStatus(f.properties.kecamatan), false),
+  onEachFeature: (feature, layer) => {
+    const kec = feature.properties.kecamatan;
+    if (!kecLayerMap[kec]) kecLayerMap[kec] = [];
+    kecLayerMap[kec].push(layer);
+    layer.bindPopup(`<div class="popup-title">Kec. ${kec}</div>`, { maxWidth: 220 });
+    layer.on({
+      mouseover(e) {
+        e.target.setStyle({ weight: 3, fillOpacity: 0.62 });
+        layer.bringToFront();
+      },
+      mouseout() {
+        kecLayerMap[kec].forEach(l => l.setStyle(getStyle(getKecStatus(kec), false)));
+      },
+      click(e) {
+        if (currentViewMode !== 'all') return;
+        map.fitBounds(e.target.getBounds(), { padding:[20,20] });
+        map.once('moveend', () => {
+          if (map.getZoom() <= ZOOM_SWITCH_THRESHOLD) map.setZoom(ZOOM_SWITCH_THRESHOLD + 1);
+        });
+      }
+    });
+  }
+});
+
+/* ════════════════════════════════════════
+   LABEL AREA — dipakai di mode "Semua Kabupaten"
+════════════════════════════════════════ */
+function showAllKecLabels() {
+  Object.keys(kecLayerMap).forEach(kec => {
+    if (kecLabelMarkers[kec]) { kecLabelMarkers[kec].addTo(map); return; }
+    const m = createDesaLabel(kecLayerMap[kec][0], kec);
+    if (m) { kecLabelMarkers[kec] = m; m.addTo(map); }
+  });
+}
+function hideAllKecLabels() {
+  Object.values(kecLabelMarkers).forEach(m => { if (map.hasLayer(m)) map.removeLayer(m); });
+}
+function showAllDesaLabels() {
+  GEOJSON_DATA.features.forEach(f => {
+    const p   = f.properties;
+    const key = makeKey(p.kecamatan, p.kel_desa);
+    const layer = layerMap[key];
+    if (!layer) return;
+    if (desaLabelMarkers[key]) { desaLabelMarkers[key].addTo(map); return; }
+    const m = createDesaLabel(layer, p.kel_desa);
+    if (m) { desaLabelMarkers[key] = m; m.addTo(map); }
+  });
+}
+
+/* ════════════════════════════════════════
+   AUTO SWITCH KECAMATAN <-> DESA (mode "Semua Kabupaten")
+════════════════════════════════════════ */
+function updateAllModeDisplay() {
+  if (currentViewMode !== 'all') return;
+  const shouldShowDesa = map.getZoom() > ZOOM_SWITCH_THRESHOLD;
+
+  if (shouldShowDesa && currentDisplayLevel !== 'desa') {
+    if (map.hasLayer(kecGeoLayer)) map.removeLayer(kecGeoLayer);
+    hideAllKecLabels();
+    if (!map.hasLayer(geoLayer)) geoLayer.addTo(map);
+    showAllDesaLabels();
+    currentDisplayLevel = 'desa';
+  } else if (!shouldShowDesa && currentDisplayLevel !== 'kecamatan') {
+    if (map.hasLayer(geoLayer)) map.removeLayer(geoLayer);
+    hideAllDesaLabels();
+    if (!map.hasLayer(kecGeoLayer)) kecGeoLayer.addTo(map);
+    showAllKecLabels();
+    currentDisplayLevel = 'kecamatan';
+  }
+}
+
+map.on('moveend', updateAllModeDisplay);
+
+/* Tampilan awal saat halaman dibuka: mode "Semua Kabupaten", zoom terluar -> level kecamatan */
+kecGeoLayer.addTo(map);
+showAllKecLabels();
+currentDisplayLevel = 'kecamatan';
 
 /* ════════════════════════════════════════
    APPLY STATUS
@@ -754,13 +865,17 @@ function applyStatus(kec, desa, status) {
   const feat = GEOJSON_DATA.features.find(f => f.properties.kecamatan===kec && f.properties.kel_desa===desa);
   layer.setPopupContent(makePopup(kec, desa, feat ? feat.properties.jenis_kd : 'Desa', status));
   if (currentViewMode==='kecamatan' && kec===highlightKec) updateKecInfo(kec);
+  if (kecLayerMap[kec]) {
+    const st = getStyle(getKecStatus(kec), false);
+    kecLayerMap[kec].forEach(l => l.setStyle(st));
+  }
   return true;
 }
 
 /* ════════════════════════════════════════
    RESET
 ════════════════════════════════════════ */
-document.getElementById('btn-reset').addEventListener('click', () => {
+document.getElementById('btn-reset')?.addEventListener('click', () => {
   if (!confirm('Reset semua data status sinyal?')) return;
   Object.keys(statusMap).forEach(k => delete statusMap[k]);
   geoLayer.eachLayer(layer => {
@@ -770,6 +885,7 @@ document.getElementById('btn-reset').addEventListener('click', () => {
     layer.setStyle(getStyle(null, dimmed));
     layer.setPopupContent(makePopup(p.kecamatan, p.kel_desa, p.jenis_kd, null));
   });
+  refreshKecStyles();
   updateStats();
   if (currentViewMode==='kecamatan' && highlightKec) updateKecInfo(highlightKec);
   showMsg('✓ Semua data direset.', '#f59e0b');
@@ -843,6 +959,7 @@ async function syncFromSheet() {
       if (ok) updated++; else notFound++;
     }
 
+    refreshKecStyles();
     updateStats();
     if (currentViewMode==='kecamatan' && highlightKec) updateKecInfo(highlightKec);
     if (currentViewMode==='kecamatan' && highlightKec && showLabels) showDesaLabelsForKec(highlightKec);
@@ -902,146 +1019,172 @@ window.addEventListener('load', () => {
 });
 
 /* ════════════════════════════════════════
-   PENCARIAN (mode semua) — live search + autocomplete
+   TOGGLE TEMA (DARK / LIGHT MODE)
 ════════════════════════════════════════ */
-const searchInput   = document.getElementById('search-input');
-const searchResults = document.getElementById('search-results');
-const MAX_SUGGESTIONS = 8;
+let currentTheme = 'dark';
+function toggleTheme() {
+  currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
+  document.body.classList.toggle('light-theme', currentTheme === 'light');
+  document.getElementById('theme-icon').innerHTML = currentTheme === 'light' ? '&#9728;&#65039;' : '&#127769;';
+  const tileUrl = currentTheme === 'light'
+    ? 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
+    : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+  baseTileLayer.setUrl(tileUrl);
+}
 
-// Daftar semua desa/kelurahan untuk pencarian (dibangun sekali)
-const villageIndex = GEOJSON_DATA.features.map(f => ({
-  kecamatan: f.properties.kecamatan,
+/* ════════════════════════════════════════
+   PENCARIAN + AUTOCOMPLETE (mode semua)
+════════════════════════════════════════ */
+/* Daftar seluruh desa/kelurahan untuk sumber autocomplete */
+const allDesaList = GEOJSON_DATA.features.map(f => ({
   desa: f.properties.kel_desa,
-  key: makeKey(f.properties.kecamatan, f.properties.kel_desa)
-}));
+  kec:  f.properties.kecamatan,
+  key:  makeKey(f.properties.kecamatan, f.properties.kel_desa)
+})).sort((a, b) => a.desa.localeCompare(b.desa, 'id'));
 
-let activeSuggestionIndex = -1;
+const searchInput = document.getElementById('search-input');
+const suggBox      = document.getElementById('search-suggestions');
+let   suggItems       = [];
+let   suggActiveIndex = -1;
 
-function escapeHtml(str) {
-  return str.replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+/* Hilangkan diakritik & lowercase agar pencarian lebih toleran */
+function normalizeText(str) {
+  return str.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
 
-// Bold-kan bagian teks yang cocok dengan kata kunci (case-insensitive, di mana saja)
-function highlightMatch(text, kw) {
-  const idx = text.toLowerCase().indexOf(kw.toLowerCase());
-  if (idx === -1) return escapeHtml(text);
-  const before = escapeHtml(text.slice(0, idx));
-  const match  = escapeHtml(text.slice(idx, idx + kw.length));
-  const after  = escapeHtml(text.slice(idx + kw.length));
-  return `${before}<mark>${match}</mark>${after}`;
-}
-
-function closeSearchResults() {
-  searchResults.classList.remove('show');
-  searchResults.innerHTML = '';
-  activeSuggestionIndex = -1;
-}
-
-function renderSearchResults(matches, kw) {
-  if (matches.length === 0) {
-    searchResults.innerHTML = '<div class="search-no-result">Tidak ada desa/kelurahan yang cocok</div>';
-    searchResults.classList.add('show');
-    return;
-  }
-  searchResults.innerHTML = matches.slice(0, MAX_SUGGESTIONS).map((m, i) => `
-    <div class="search-result-item" data-index="${i}" data-key="${encodeURIComponent(m.key)}">
-      <div class="search-result-name">${highlightMatch(m.desa, kw)}</div>
-      <div class="search-result-kec">Kec. ${escapeHtml(m.kecamatan)}</div>
-    </div>
-  `).join('');
-  searchResults.classList.add('show');
-  activeSuggestionIndex = -1;
-
-  searchResults.querySelectorAll('.search-result-item').forEach(el => {
-    el.addEventListener('click', () => {
-      const item = matches[Number(el.dataset.index)];
-      selectVillage(item);
-    });
+function resetMapHighlight() {
+  geoLayer.eachLayer(l => {
+    const p = l.feature.properties;
+    l.setStyle(getStyle(statusMap[makeKey(p.kecamatan, p.kel_desa)], false));
   });
 }
 
-// Terapkan highlight visual di peta untuk hasil pencarian (dim yang tidak cocok)
-function highlightSearchMatches(matchKeys) {
-  const matchSet = new Set(matchKeys);
+/* Redupkan semua desa kecuali yang cocok dengan kata kunci */
+function highlightSearchKeyword(kw) {
+  const nkw = normalizeText(kw);
+  let found = null;
   geoLayer.eachLayer(layer => {
     const p   = layer.feature.properties;
     const key = makeKey(p.kecamatan, p.kel_desa);
-    if (matchSet.has(key)) {
+    if (normalizeText(p.kel_desa).includes(nkw)) {
       layer.setStyle({ ...getStyle(statusMap[key], false), weight:3, fillOpacity:0.85 });
       layer.bringToFront();
+      if (!found) found = layer;
     } else {
       layer.setStyle({ ...getStyle(statusMap[key], false), fillOpacity:0.04, opacity:0.15 });
     }
   });
+  return found;
 }
 
-function resetSearchHighlight() {
-  geoLayer.eachLayer(l => l.setStyle(getStyle(statusMap[makeKey(l.feature.properties.kecamatan, l.feature.properties.kel_desa)], false)));
-}
-
-// Pilih satu desa dari hasil pencarian: zoom, buka popup, dan tampilkan info
-function selectVillage(item) {
+/* Fokuskan peta ke satu desa terpilih dari daftar saran */
+function selectDesa(item) {
+  if (!item) return;
+  suggBox.classList.remove('show');
+  searchInput.value = item.desa;
   const layer = layerMap[item.key];
   if (!layer) return;
-  searchInput.value = item.desa;
-  closeSearchResults();
-  highlightSearchMatches([item.key]);
-  map.fitBounds(layer.getBounds(), { maxZoom: 14, padding: [60, 60] });
+  // Pastikan level desa/kelurahan yang aktif ditampilkan agar popup & highlight terlihat
+  if (map.hasLayer(kecGeoLayer)) map.removeLayer(kecGeoLayer);
+  hideAllKecLabels();
+  if (!map.hasLayer(geoLayer)) geoLayer.addTo(map);
+  showAllDesaLabels();
+  currentDisplayLevel = 'desa';
+  resetMapHighlight();
+  layer.setStyle({ ...getStyle(statusMap[item.key], false), weight:3.5, fillOpacity:0.9 });
   layer.bringToFront();
+  map.fitBounds(layer.getBounds(), { maxZoom:14, padding:[60,60] });
   layer.openPopup();
+  showMsg(`📍 Menampilkan: ${item.desa} (Kec. ${item.kec})`, '#4da6ff');
+}
+
+function renderSuggestions(list) {
+  suggItems = list;
+  suggActiveIndex = -1;
+  if (!searchInput.value.trim()) {
+    suggBox.classList.remove('show');
+    suggBox.innerHTML = '';
+    return;
+  }
+  if (list.length === 0) {
+    suggBox.innerHTML = '<div class="search-suggestion-empty">Desa/Kelurahan tidak ditemukan.</div>';
+    suggBox.classList.add('show');
+    return;
+  }
+  suggBox.innerHTML = list.map((item, i) =>
+    `<div class="search-suggestion-item" data-index="${i}">
+       <span>${item.desa}</span>
+       <span class="sugg-kec">Kec. ${item.kec}</span>
+     </div>`
+  ).join('');
+  suggBox.classList.add('show');
+  suggBox.querySelectorAll('.search-suggestion-item').forEach(el => {
+    el.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      const idx = parseInt(el.dataset.index, 10);
+      selectDesa(suggItems[idx]);
+    });
+  });
+}
+
+function updateActiveSuggestionStyle() {
+  suggBox.querySelectorAll('.search-suggestion-item').forEach((el, i) => {
+    el.classList.toggle('active', i === suggActiveIndex);
+  });
 }
 
 searchInput.addEventListener('input', function() {
-  const kw = this.value.trim().toLowerCase();
+  const kw = this.value.trim();
   if (!kw) {
-    closeSearchResults();
-    resetSearchHighlight();
+    resetMapHighlight();
+    renderSuggestions([]);
     return;
   }
-  // Pencarian tidak case-sensitive dan menemukan kata di posisi mana pun pada nama desa
-  const matches = villageIndex.filter(v => v.desa.toLowerCase().includes(kw));
-  renderSearchResults(matches, kw);
-  highlightSearchMatches(matches.map(m => m.key));
+  const nkw = normalizeText(kw);
+  const matches = allDesaList.filter(item => normalizeText(item.desa).includes(nkw));
+  matches.sort((a, b) => {
+    const aStarts = normalizeText(a.desa).startsWith(nkw) ? 0 : 1;
+    const bStarts = normalizeText(b.desa).startsWith(nkw) ? 0 : 1;
+    if (aStarts !== bStarts) return aStarts - bStarts;
+    return a.desa.localeCompare(b.desa, 'id');
+  });
+  renderSuggestions(matches.slice(0, 8));
+  highlightSearchKeyword(kw);
 });
 
-// Navigasi hasil pencarian dengan keyboard (panah atas/bawah + enter)
 searchInput.addEventListener('keydown', function(e) {
-  const items = searchResults.querySelectorAll('.search-result-item');
+  const items = suggBox.querySelectorAll('.search-suggestion-item');
   if (!items.length) return;
-
   if (e.key === 'ArrowDown') {
     e.preventDefault();
-    activeSuggestionIndex = Math.min(activeSuggestionIndex + 1, items.length - 1);
-    items.forEach((el, i) => el.classList.toggle('active', i === activeSuggestionIndex));
-    items[activeSuggestionIndex].scrollIntoView({ block: 'nearest' });
+    suggActiveIndex = Math.min(suggActiveIndex + 1, items.length - 1);
+    updateActiveSuggestionStyle();
+    items[suggActiveIndex].scrollIntoView({ block:'nearest' });
   } else if (e.key === 'ArrowUp') {
     e.preventDefault();
-    activeSuggestionIndex = Math.max(activeSuggestionIndex - 1, 0);
-    items.forEach((el, i) => el.classList.toggle('active', i === activeSuggestionIndex));
-    items[activeSuggestionIndex].scrollIntoView({ block: 'nearest' });
+    suggActiveIndex = Math.max(suggActiveIndex - 1, 0);
+    updateActiveSuggestionStyle();
+    items[suggActiveIndex].scrollIntoView({ block:'nearest' });
   } else if (e.key === 'Enter') {
     e.preventDefault();
-    const kw = this.value.trim().toLowerCase();
-    if (!kw) return;
-    const matches = villageIndex.filter(v => v.desa.toLowerCase().includes(kw));
-    const chosen = activeSuggestionIndex >= 0 ? matches[activeSuggestionIndex] : matches[0];
-    if (chosen) selectVillage(chosen);
+    if (suggActiveIndex >= 0 && suggItems[suggActiveIndex]) {
+      selectDesa(suggItems[suggActiveIndex]);
+    } else if (suggItems.length > 0) {
+      selectDesa(suggItems[0]);
+    }
   } else if (e.key === 'Escape') {
-    closeSearchResults();
+    suggBox.classList.remove('show');
   }
 });
 
 searchInput.addEventListener('focus', function() {
-  const kw = this.value.trim().toLowerCase();
-  if (kw) {
-    const matches = villageIndex.filter(v => v.desa.toLowerCase().includes(kw));
-    renderSearchResults(matches, kw);
-  }
+  if (this.value.trim() && suggItems.length) suggBox.classList.add('show');
 });
 
-// Tutup dropdown saat klik di luar area pencarian
 document.addEventListener('click', function(e) {
-  if (!e.target.closest('.search-wrap')) closeSearchResults();
+  if (!suggBox.contains(e.target) && e.target !== searchInput) {
+    suggBox.classList.remove('show');
+  }
 });
 
 /* ════════════════════════════════════════
@@ -1075,48 +1218,6 @@ window.addEventListener('resize', () => {
   }
   setTimeout(() => map.invalidateSize(), 320);
 });
-
-/* ════════════════════════════════════════
-   DARK MODE / LIGHT MODE
-════════════════════════════════════════ */
-const THEME_KEY = 'peta-sinyal-theme';
-
-const darkTileUrl  = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
-const lightTileUrl = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
-let currentTileLayer = null;
-
-function setMapTileForTheme(theme) {
-  if (currentTileLayer) map.removeLayer(currentTileLayer);
-  currentTileLayer = L.tileLayer(theme === 'light' ? lightTileUrl : darkTileUrl, {
-    maxZoom: 19, subdomains: 'abcd'
-  }).addTo(map);
-}
-
-function applyTheme(theme) {
-  const btn = document.getElementById('theme-toggle');
-  if (theme === 'light') {
-    document.documentElement.setAttribute('data-theme', 'light');
-    if (btn) { btn.innerHTML = '&#9728;&#65039;'; btn.title = 'Ganti ke Mode Gelap'; }
-  } else {
-    document.documentElement.removeAttribute('data-theme');
-    if (btn) { btn.innerHTML = '&#127769;'; btn.title = 'Ganti ke Mode Terang'; }
-  }
-  setMapTileForTheme(theme);
-}
-
-function toggleTheme() {
-  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
-  const next = isLight ? 'dark' : 'light';
-  try { localStorage.setItem(THEME_KEY, next); } catch(e) {}
-  applyTheme(next);
-}
-
-// Inisialisasi tema saat halaman dimuat (menggantikan tile layer default di MAP INIT)
-(function initTheme() {
-  let saved = 'dark';
-  try { saved = localStorage.getItem(THEME_KEY) || 'dark'; } catch(e) {}
-  applyTheme(saved);
-})();
 </script>
 </body>
 </html>
