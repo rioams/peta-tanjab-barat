@@ -238,6 +238,7 @@
     #map { flex: 1; height: 100vh; background: #0d1b2a; }
     /* Basemap OSM: dibuat gelap saat tema dark */
     body:not(.light-theme) .base-tiles { filter: invert(1) hue-rotate(180deg) brightness(0.85) contrast(0.9) saturate(0.6); }
+    #map .leaflet-outlinePane-pane path { filter: drop-shadow(0 0 4px rgba(56,189,248,0.6)); }
     .leaflet-control-attribution { font-size: 10px; background: rgba(255,255,255,0.7) !important; }
 
 
@@ -505,7 +506,7 @@ function getStyle(status, dimmed) {
   if (status === 'baik')   return { color:'#15803d', weight:2.2, opacity:1, fillColor:'#22c55e', fillOpacity:0.5 };
   if (status === 'sedang') return { color:'#b45309', weight:2.2, opacity:1, fillColor:'#f59e0b', fillOpacity:0.5 };
   if (status === 'buruk')  return { color:'#b91c1c', weight:2.2, opacity:1, fillColor:'#ef4444', fillOpacity:0.5 };
-  return { color:'#1a8cff', weight:1.6, opacity:1, fillColor:'#1a8cff', fillOpacity:0.18 };
+  return { color:'#1a8cff', weight:1.6, opacity:1, fillColor:'#1a8cff', fillOpacity:0.26 };
 }
 
 function makePopup(kec, desa, jenis, status) {
@@ -1028,6 +1029,71 @@ map.fitBounds(geoLayer.getBounds(), { padding:[20,20] });
    langsung menyusul sesaat kemudian (jedanya nyaris tidak terasa). */
 initKecamatanBoundariesAndLabels();
 showKecBoundaries();
+
+/* ════════════════════════════════════════
+   FOKUS WILAYAH TANJUNG JABUNG BARAT
+   - Area di luar kabupaten diredupkan (mask)
+   - Garis batas luar kabupaten dibuat tebal + glow
+   - Peta dibatasi agar tidak melenceng jauh dari kabupaten
+════════════════════════════════════════ */
+const FOCUS_MASK_STYLE = {
+  dark:  { fillColor: '#030812', fillOpacity: 0.80 },
+  light: { fillColor: '#e3eaf2', fillOpacity: 0.82 }
+};
+const FOCUS_OUTLINE_COLOR = { dark: '#38bdf8', light: '#0b5fd0' };
+let focusMaskLayer = null, focusOutlineLayer = null, focusGlowLayer = null;
+
+function initFocusRegion() {
+  /* Pane khusus: mask di bawah poligon desa (400), garis batas di atasnya */
+  map.createPane('maskPane');    map.getPane('maskPane').style.zIndex = 350;    map.getPane('maskPane').style.pointerEvents = 'none';
+  map.createPane('outlinePane'); map.getPane('outlinePane').style.zIndex = 405; map.getPane('outlinePane').style.pointerEvents = 'none';
+
+  /* 1) Gabungkan seluruh kecamatan menjadi satu bentuk kabupaten */
+  let outer = null;
+  try {
+    const feats = kecBoundaryLayer.toGeoJSON().features;
+    outer = feats[0];
+    for (let i = 1; i < feats.length; i++) {
+      try { const u = turf.union(outer, feats[i]); if (u) outer = u; } catch (e) {}
+    }
+  } catch (e) { return; }
+  if (!outer || !outer.geometry) return;
+
+  const polys = outer.geometry.type === 'Polygon'
+    ? [outer.geometry.coordinates] : outer.geometry.coordinates;
+  const toLatLng = ring => ring.map(c => [c[1], c[0]]);
+
+  /* 2) Mask: kotak dunia dengan "lubang" berbentuk kabupaten */
+  const world = [[-89, -180], [-89, 180], [89, 180], [89, -180]];
+  const holes = polys.map(poly => toLatLng(poly[0]));
+  focusMaskLayer = L.polygon([world, ...holes], {
+    pane: 'maskPane', stroke: false, interactive: false, fillRule: 'evenodd',
+    ...FOCUS_MASK_STYLE[currentTheme]
+  }).addTo(map);
+
+  /* 3) Garis batas luar: lapisan glow lebar + garis utama */
+  const rings = polys.map(poly => toLatLng(poly[0]));
+  focusGlowLayer = L.polyline(rings, {
+    pane: 'outlinePane', color: FOCUS_OUTLINE_COLOR[currentTheme],
+    weight: 10, opacity: 0.22, fill: false, interactive: false, lineJoin: 'round'
+  }).addTo(map);
+  focusOutlineLayer = L.polyline(rings, {
+    pane: 'outlinePane', color: FOCUS_OUTLINE_COLOR[currentTheme],
+    weight: 3, opacity: 1, fill: false, interactive: false, lineJoin: 'round'
+  }).addTo(map);
+
+  /* 4) Batasi area geser & zoom-out supaya tetap fokus ke kabupaten */
+  const b = geoLayer.getBounds();
+  map.setMaxBounds(b.pad(0.35));
+  map.options.maxBoundsViscosity = 0.9;
+  map.setMinZoom(Math.max(map.getBoundsZoom(b.pad(0.35)), 5));
+}
+function updateFocusTheme() {
+  if (focusMaskLayer)    focusMaskLayer.setStyle(FOCUS_MASK_STYLE[currentTheme]);
+  if (focusOutlineLayer) focusOutlineLayer.setStyle({ color: FOCUS_OUTLINE_COLOR[currentTheme] });
+  if (focusGlowLayer)    focusGlowLayer.setStyle({ color: FOCUS_OUTLINE_COLOR[currentTheme] });
+}
+initFocusRegion();
 requestAnimationFrame(() => {
   requestAnimationFrame(updateKecLabelVisibilityByZoom);
 });
@@ -1213,6 +1279,7 @@ function toggleTheme() {
   document.getElementById('theme-icon').innerHTML = currentTheme === 'light' ? '&#9728;&#65039;' : '&#127769;';
   /* Tile sama untuk kedua tema; tampilan gelap diatur oleh CSS (.base-tiles) */
   if (kecBoundaryLayer) kecBoundaryLayer.setStyle({ color: KEC_BOUNDARY_COLOR[currentTheme] });
+  updateFocusTheme();
 }
 
 /* ════════════════════════════════════════
