@@ -239,6 +239,110 @@
     /* Basemap OSM: dibuat gelap saat tema dark */
     body:not(.light-theme) .base-tiles { filter: invert(1) hue-rotate(180deg) brightness(0.85) contrast(0.9) saturate(0.6); }
     #map .leaflet-outlinePane-pane path { filter: drop-shadow(0 0 4px rgba(56,189,248,0.6)); }
+
+    /* ════════ TAMPILAN SCREENSHOT ════════ */
+    .shot-btn { display:flex; align-items:center; justify-content:center; gap:8px; width:100%; padding:10px; margin-bottom:6px; background:transparent; border:1px solid var(--accent); color:var(--accent-light); border-radius:8px; font-size:12.5px; font-weight:700; letter-spacing:.03em; cursor:pointer; transition:all .2s; }
+    .shot-btn:hover { background:var(--accent); color:#fff; }
+    .shot-hint { font-size:10px; color:var(--text-muted); text-align:center; margin-bottom:12px; }
+
+    #shot-header, #shot-side, #shot-footer, #shot-exit { display:none; }
+    body.shot-mode #sidebar, body.shot-mode #sidebar-toggle, body.shot-mode #map-overlay { display:none !important; }
+    body.shot-mode .leaflet-control-zoom { display:none; }
+
+    body.shot-mode #app {
+      display:grid;
+      grid-template-columns:minmax(0,1fr) 23.5em;
+      grid-template-rows:auto minmax(0,1fr) auto;
+      grid-template-areas:"head head" "map side" "foot foot";
+      gap:1em; padding:1.2em 1.5em 1em;
+      font-size:clamp(10px, 1.45vh, 16px);
+      background:
+        radial-gradient(1100px 520px at 88% -8%, rgba(26,140,255,.11), transparent 62%),
+        linear-gradient(160deg,#0a1626 0%,#0d1b2a 55%,#091320 100%);
+    }
+    body.shot-mode.light-theme #app {
+      background:
+        radial-gradient(1100px 520px at 88% -8%, rgba(26,115,232,.09), transparent 62%),
+        linear-gradient(160deg,#f6f9fd 0%,#eaf1f8 100%);
+    }
+    body.shot-mode #map {
+      grid-area:map; height:auto; min-height:0; flex:none;
+      border-radius:1.1em; border:1px solid var(--panel-border);
+      box-shadow:var(--shadow); isolation:isolate;
+    }
+
+    /* Header */
+    body.shot-mode #shot-header { grid-area:head; display:flex; align-items:flex-end; justify-content:space-between; gap:1.5em; padding:.1em .2em 0; }
+    .shot-eyebrow { font-size:.72em; font-weight:700; letter-spacing:.24em; text-transform:uppercase; color:var(--text-muted); margin-bottom:.5em; }
+    #shot-header h1 { font-size:2.15em; font-weight:800; letter-spacing:-.01em; line-height:1.1; color:var(--text-main); }
+    #shot-header h1 span { color:var(--accent-light); }
+    body.light-theme #shot-header h1 span { color:var(--accent); }
+    .shot-rule { width:3.4em; height:.22em; border-radius:1em; margin-top:.7em; background:linear-gradient(90deg,var(--accent),transparent); }
+    .shot-meta { text-align:right; flex-shrink:0; }
+    .shot-chip { display:inline-block; padding:.35em .9em; border:1px solid var(--panel-border); border-radius:2em; font-size:.82em; font-weight:600; color:var(--text-main); background:color-mix(in srgb,var(--panel-bg) 80%,transparent); }
+    .shot-scope { margin-top:.55em; font-size:.8em; color:var(--text-muted); }
+
+    /* Panel kanan */
+    body.shot-mode #shot-side { grid-area:side; display:flex; flex-direction:column; gap:1em; min-height:0; }
+    .shot-card { background:color-mix(in srgb,var(--panel-bg) 90%,transparent); border:1px solid var(--panel-border); border-radius:1em; padding:1.1em 1.25em; box-shadow:var(--shadow); }
+    .shot-card h2 { display:flex; justify-content:space-between; align-items:baseline; font-size:.74em; font-weight:700; letter-spacing:.15em; text-transform:uppercase; color:var(--text-muted); margin-bottom:1em; }
+    .shot-card h2 small { font-size:.95em; letter-spacing:.06em; text-transform:none; font-weight:600; }
+    .shot-main-body { display:flex; flex-direction:column; }
+    .shot-donut-wrap { position:relative; width:10.5em; height:10.5em; margin:0 auto 1em; flex-shrink:0; }
+    .shot-donut-wrap svg { width:100%; height:100%; display:block; }
+    .shot-donut-center { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+    .shot-donut-center b { font-size:2.3em; font-weight:800; line-height:1; color:var(--text-main); }
+    .shot-donut-center span { margin-top:.35em; font-size:.66em; letter-spacing:.12em; text-transform:uppercase; color:var(--text-muted); }
+    #shot-rows { list-style:none; flex:1; }
+    #shot-rows li { margin-bottom:.8em; }
+    #shot-rows li:last-child { margin-bottom:0; }
+    .r-top { display:flex; align-items:baseline; gap:.6em; margin-bottom:.35em; }
+    .r-dot { width:.7em; height:.7em; border-radius:50%; flex-shrink:0; align-self:center; }
+    .r-lbl { font-size:.92em; font-weight:600; color:var(--text-main); }
+    .r-cnt { flex:1; font-size:.76em; color:var(--text-muted); }
+    .r-pct { font-size:1.3em; font-weight:800; color:var(--text-main); font-variant-numeric:tabular-nums; }
+    .r-bar { height:.32em; border-radius:1em; background:rgba(127,150,180,.16); overflow:hidden; }
+    .r-bar div { height:100%; border-radius:1em; }
+
+    #shot-kec-card { flex:1; min-height:0; display:flex; flex-direction:column; overflow:hidden; }
+    #shot-kec-list { flex:1; min-height:0; display:flex; flex-direction:column; justify-content:space-between; }
+    .k-row { display:grid; grid-template-columns:7.6em minmax(0,1fr) 2.9em; align-items:center; column-gap:.7em; font-size:.82em; }
+    .k-name { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--text-main); }
+    .k-bar { display:flex; gap:1px; height:.62em; border-radius:1em; overflow:hidden; background:rgba(127,150,180,.16); }
+    .k-bar i { display:block; height:100%; }
+    .k-val { text-align:right; font-weight:700; color:var(--text-main); font-variant-numeric:tabular-nums; }
+
+    /* Footer */
+    body.shot-mode #shot-footer { grid-area:foot; display:flex; align-items:center; justify-content:space-between; gap:1.5em; font-size:.8em; color:var(--text-muted); padding:0 .2em; }
+    .shot-legend { display:flex; align-items:center; flex-wrap:wrap; gap:.6em 1.4em; }
+    .shot-legend span { display:inline-flex; align-items:center; gap:.55em; }
+    .shot-legend i { width:1.5em; height:.9em; border-radius:.25em; border:1px solid; display:inline-block; }
+
+    /* Kontrol kartografi di peta */
+    .shot-north { background:color-mix(in srgb,var(--panel-bg) 82%,transparent); border:1px solid var(--panel-border); border-radius:.8em; padding:.4em .55em .3em; color:var(--text-main); line-height:0; }
+    .shot-north svg { width:1.5em; height:auto; }
+    body.shot-mode .leaflet-control-scale-line { color:var(--text-main); border-color:var(--text-muted); background:color-mix(in srgb,var(--panel-bg) 78%,transparent); font-size:.75em; }
+    body.shot-mode .leaflet-control-attribution { font-size:.68em; background:color-mix(in srgb,var(--panel-bg) 78%,transparent) !important; color:var(--text-muted); }
+    body.shot-mode .leaflet-control-attribution a { color:var(--text-muted); }
+
+    /* Tombol keluar (muncul sebentar saat mouse digerakkan) */
+    #shot-exit { position:fixed; top:12px; right:12px; z-index:10000; padding:8px 12px; border-radius:8px; border:1px solid var(--panel-border); background:var(--panel-bg); color:var(--text-main); font-size:12px; font-weight:600; cursor:pointer; box-shadow:var(--shadow); opacity:0; pointer-events:none; transition:opacity .3s; }
+    #shot-exit kbd { margin-left:6px; padding:1px 6px; border:1px solid var(--panel-border); border-radius:4px; font-size:10px; color:var(--text-muted); font-family:inherit; }
+    body.shot-mode #shot-exit { display:block; }
+    body.shot-mode.shot-ui #shot-exit { opacity:1; pointer-events:auto; }
+
+    /* Layar potret */
+    @media (max-aspect-ratio: 1/1) {
+      body.shot-mode #app { grid-template-columns:minmax(0,1fr); grid-template-rows:auto minmax(0,1fr) auto auto; grid-template-areas:"head" "map" "side" "foot"; font-size:clamp(9px,2.4vw,15px); padding:1em; }
+      body.shot-mode #shot-header { flex-direction:column; align-items:flex-start; gap:.8em; }
+      body.shot-mode #shot-header h1 { font-size:1.6em; }
+      .shot-meta { text-align:left; }
+      body.shot-mode #shot-kec-card { display:none; }
+      .shot-main-body { flex-direction:row; align-items:center; gap:1.2em; }
+      .shot-donut-wrap { width:8em; height:8em; margin:0; }
+      body.shot-mode #shot-footer { flex-direction:column; align-items:flex-start; gap:.5em; }
+    }
+
     .leaflet-control-attribution { font-size: 10px; background: rgba(255,255,255,0.7) !important; }
 
 
@@ -341,6 +445,10 @@
     </div>
     <div id="sidebar-body">
 
+      <!-- TAMPILAN SCREENSHOT -->
+      <button class="shot-btn" onclick="enterShotMode()" title="Layout khusus untuk tangkapan layar">&#128247; Tampilan Screenshot</button>
+      <div class="shot-hint">Judul, persentase &amp; legenda · Esc untuk keluar</div>
+
       <!-- VIEW MODE TOGGLE -->
       <span class="section-label">&#128065; Mode Tampilan</span>
       <div class="view-toggle">
@@ -437,6 +545,47 @@
   <!-- Overlay gelap saat sidebar terbuka di mobile -->
   <div id="map-overlay" onclick="toggleSidebar()"></div>
   <div id="map"></div>
+
+  <!-- ===== Layout Tampilan Screenshot ===== -->
+  <header id="shot-header">
+    <div>
+      <div class="shot-eyebrow">Sebaran per Desa / Kelurahan</div>
+      <h1>Peta Kualitas Sinyal <span>Kab. Tanjung Jabung Barat</span></h1>
+      <div class="shot-rule"></div>
+    </div>
+    <div class="shot-meta">
+      <div class="shot-chip" id="shot-date">─</div>
+      <div class="shot-scope" id="shot-scope">─</div>
+    </div>
+  </header>
+
+  <aside id="shot-side">
+    <section class="shot-card" id="shot-main-card">
+      <h2>Persentase Kualitas Sinyal</h2>
+      <div class="shot-main-body">
+        <div class="shot-donut-wrap">
+          <div id="shot-donut" style="width:100%;height:100%"></div>
+          <div class="shot-donut-center"><b id="shot-total">0</b><span>desa / kel.</span></div>
+        </div>
+        <ul id="shot-rows"></ul>
+      </div>
+    </section>
+    <section class="shot-card" id="shot-kec-card">
+      <h2>Komposisi per Kecamatan <small>% Baik</small></h2>
+      <div id="shot-kec-list"></div>
+    </section>
+  </aside>
+
+  <footer id="shot-footer">
+    <div class="shot-legend">
+      <span><i style="background:rgba(34,197,94,.5);border-color:#22c55e"></i>Baik</span>
+      <span><i style="background:rgba(245,158,11,.5);border-color:#f59e0b"></i>Sedang</span>
+      <span><i style="background:rgba(239,68,68,.5);border-color:#ef4444"></i>Buruk / Blankspot</span>
+      <span><i style="background:rgba(26,140,255,.26);border-color:#1a8cff"></i>Belum terdata</span>
+    </div>
+    <div>Persentase dihitung dari jumlah desa/kelurahan</div>
+  </footer>
+  <button id="shot-exit" onclick="exitShotMode()">&#10005; Keluar tampilan screenshot <kbd>Esc</kbd></button>
 </div>
 
 <div id="loading-overlay">
@@ -1227,6 +1376,7 @@ async function syncFromSheet() {
     showMsg(`📊 Sync selesai — ${updated} desa`, '#22c55e');
 
     const now = new Date();
+    lastSyncAt = now;
     document.getElementById('last-sync').textContent =
       `Terakhir sync: ${now.toLocaleDateString('id-ID')} ${now.toLocaleTimeString('id-ID', {hour:'2-digit',minute:'2-digit'})}`;
 
@@ -1429,6 +1579,180 @@ document.addEventListener('click', function(e) {
   if (!suggBox.contains(e.target) && e.target !== searchInput) {
     suggBox.classList.remove('show');
   }
+});
+
+
+/* ════════════════════════════════════════
+   TAMPILAN SCREENSHOT
+════════════════════════════════════════ */
+let shotMode = false, shotScaleCtl = null, shotNorthCtl = null, shotUiTimer = null;
+let shotPrev = { minZoom: 0, snap: 1 }, lastSyncAt = null, shotResizeT = null;
+
+const SHOT_STATUS = [
+  { k:'baik',   label:'Baik',              color:'var(--good)' },
+  { k:'sedang', label:'Sedang',            color:'var(--medium)' },
+  { k:'buruk',  label:'Buruk / Blankspot', color:'var(--bad)' },
+  { k:'none',   label:'Belum terdata',     color:'#64748b' }
+];
+
+function shotEsc(t) { return String(t).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+function shotCount(features) {
+  const c = { baik:0, sedang:0, buruk:0, none:0 };
+  features.forEach(f => {
+    const s = statusMap[makeKey(f.properties.kecamatan, f.properties.kel_desa)];
+    c[(s==='baik'||s==='sedang'||s==='buruk') ? s : 'none']++;
+  });
+  return c;
+}
+
+/* Persentase 1 desimal yang dijamin berjumlah 100% (largest remainder) */
+function shotPercents(counts, total) {
+  const keys = SHOT_STATUS.map(s => s.k);
+  if (!total) return { baik:0, sedang:0, buruk:0, none:0 };
+  const raw = keys.map(k => counts[k] / total * 1000);
+  const base = raw.map(Math.floor);
+  let left = 1000 - base.reduce((a,b) => a+b, 0);
+  raw.map((v,i) => [v - Math.floor(v), i]).sort((a,b) => b[0]-a[0])
+     .forEach(([,i]) => { if (left > 0) { base[i]++; left--; } });
+  const out = {}; keys.forEach((k,i) => out[k] = base[i] / 10);
+  return out;
+}
+const shotFmt = v => v.toLocaleString('id-ID', { minimumFractionDigits:1, maximumFractionDigits:1 }) + '%';
+
+function shotDonutSVG(counts, total) {
+  const R = 46, C = 2 * Math.PI * R, SW = 14;
+  let svg = `<svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="${R}" fill="none" stroke-width="${SW}" style="stroke:rgba(127,150,180,.18)"/>`;
+  if (total > 0) {
+    const segs = SHOT_STATUS.filter(s => counts[s.k] > 0);
+    const gap = segs.length > 1 ? 1.6 : 0;
+    let acc = 0;
+    segs.forEach(s => {
+      const len = counts[s.k] / total * C;
+      svg += `<circle cx="60" cy="60" r="${R}" fill="none" stroke-width="${SW}" style="stroke:${s.color}" ` +
+             `stroke-dasharray="${Math.max(len - gap, 0.01)} ${C}" stroke-dashoffset="${-acc}" transform="rotate(-90 60 60)"/>`;
+      acc += len;
+    });
+  }
+  return svg + '</svg>';
+}
+
+function renderShot() {
+  const scopeKec = (currentViewMode === 'kecamatan' && highlightKec) ? highlightKec : '';
+  const feats = GEOJSON_DATA.features.filter(f => !scopeKec || f.properties.kecamatan === scopeKec);
+  const total = feats.length;
+  const counts = shotCount(feats);
+  const pct = shotPercents(counts, total);
+  const kecNames = Object.keys(kecamatanDesaMap).length
+    ? Object.keys(kecamatanDesaMap)
+    : [...new Set(GEOJSON_DATA.features.map(f => f.properties.kecamatan))];
+
+  // Header
+  const d = lastSyncAt || new Date();
+  document.getElementById('shot-date').textContent =
+    'Per ' + d.toLocaleDateString('id-ID', { day:'numeric', month:'long', year:'numeric' });
+  document.getElementById('shot-scope').textContent = scopeKec
+    ? `Kecamatan ${scopeKec} · ${total} desa/kelurahan`
+    : `${total} desa/kelurahan · ${kecNames.length} kecamatan`;
+
+  // Donut + baris persentase
+  document.getElementById('shot-total').textContent = total;
+  document.getElementById('shot-donut').innerHTML = shotDonutSVG(counts, total);
+  document.getElementById('shot-rows').innerHTML = SHOT_STATUS
+    .filter(s => s.k !== 'none' || counts.none > 0)
+    .map(s => `<li>
+      <div class="r-top"><i class="r-dot" style="background:${s.color}"></i><span class="r-lbl">${s.label}</span>
+        <span class="r-cnt">${counts[s.k]} desa</span><span class="r-pct">${shotFmt(pct[s.k])}</span></div>
+      <div class="r-bar"><div style="width:${pct[s.k]}%;background:${s.color}"></div></div></li>`).join('');
+
+  // Komposisi per kecamatan (diurutkan dari % Baik tertinggi)
+  const card = document.getElementById('shot-kec-card');
+  card.style.display = scopeKec ? 'none' : '';
+  if (!scopeKec) {
+    const rows = kecNames.map(k => {
+      const fs = GEOJSON_DATA.features.filter(f => f.properties.kecamatan === k);
+      const c = shotCount(fs);
+      return { k, c, n: fs.length, baik: fs.length ? c.baik / fs.length : 0 };
+    }).sort((a,b) => b.baik - a.baik || a.k.localeCompare(b.k, 'id'));
+    document.getElementById('shot-kec-list').innerHTML = rows.map(r => `
+      <div class="k-row"><span class="k-name" title="${shotEsc(r.k)}">${shotEsc(r.k)}</span>
+        <span class="k-bar">${SHOT_STATUS.map(s => r.c[s.k] ? `<i style="flex:${r.c[s.k]};background:${s.color}"></i>` : '').join('')}</span>
+        <span class="k-val">${Math.round(r.baik * 100)}%</span></div>`).join('');
+  }
+}
+
+function shotFit() {
+  map.invalidateSize();
+  let b = geoLayer.getBounds(), maxZoom;
+  if (currentViewMode === 'kecamatan' && highlightKec) {
+    const kb = L.latLngBounds([]);
+    geoLayer.eachLayer(l => { if (l.feature.properties.kecamatan === highlightKec) kb.extend(l.getBounds()); });
+    if (kb.isValid()) { b = kb; maxZoom = 13; }
+  }
+  map.fitBounds(b, { padding:[14,14], maxZoom, animate:false });
+}
+
+function shotShowUI() {
+  document.body.classList.add('shot-ui');
+  clearTimeout(shotUiTimer);
+  shotUiTimer = setTimeout(() => document.body.classList.remove('shot-ui'), 2500);
+}
+
+function enterShotMode() {
+  if (shotMode) return;
+  shotMode = true;
+  document.getElementById('map-overlay').classList.remove('show');
+  map.closePopup();
+  document.body.classList.add('shot-mode');
+  renderShot();
+
+  // Zoom pecahan agar peta pas memenuhi bingkai
+  shotPrev = { minZoom: map.getMinZoom(), snap: map.options.zoomSnap };
+  map.options.zoomSnap = 0;
+  map.setMinZoom(1);
+
+  shotScaleCtl = L.control.scale({ imperial:false, position:'bottomleft', maxWidth:130 }).addTo(map);
+  const North = L.Control.extend({
+    options: { position:'topright' },
+    onAdd() {
+      const el = L.DomUtil.create('div', 'shot-north');
+      el.innerHTML = '<svg viewBox="0 0 32 44" aria-label="Utara"><path d="M16 2 L27 31 L16 25 L5 31 Z" fill="currentColor"/>' +
+                     '<text x="16" y="43" text-anchor="middle" font-size="11" font-weight="700" fill="currentColor" font-family="Segoe UI,system-ui,sans-serif">U</text></svg>';
+      return el;
+    }
+  });
+  shotNorthCtl = new North().addTo(map);
+
+  setTimeout(shotFit, 60);
+  setTimeout(shotFit, 380);
+  shotShowUI();
+}
+
+function exitShotMode() {
+  if (!shotMode) return;
+  shotMode = false;
+  document.body.classList.remove('shot-mode', 'shot-ui');
+  if (shotScaleCtl) { map.removeControl(shotScaleCtl); shotScaleCtl = null; }
+  if (shotNorthCtl) { map.removeControl(shotNorthCtl); shotNorthCtl = null; }
+  map.options.zoomSnap = shotPrev.snap;
+  map.setMinZoom(shotPrev.minZoom);
+  setTimeout(() => {
+    map.invalidateSize();
+    if (currentViewMode === 'kecamatan' && highlightKec) applyHighlight(highlightKec);
+    else map.fitBounds(geoLayer.getBounds(), { padding:[20,20] });
+  }, 60);
+}
+
+document.addEventListener('mousemove', () => { if (shotMode) shotShowUI(); });
+document.addEventListener('keydown', e => {
+  if (!shotMode) return;
+  if (e.key === 'Escape') exitShotMode();
+  else if ((e.key === 't' || e.key === 'T') && !e.ctrlKey && !e.metaKey && !e.altKey) { toggleTheme(); }
+});
+window.addEventListener('resize', () => {
+  if (!shotMode) return;
+  clearTimeout(shotResizeT);
+  shotResizeT = setTimeout(shotFit, 250);
 });
 
 /* ════════════════════════════════════════
