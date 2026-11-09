@@ -236,6 +236,10 @@
     #status-msg { font-size: 11px; color: var(--accent-light); margin-top: 7px; min-height: 15px; text-align: center; transition: opacity 0.4s; }
 
     #map { flex: 1; height: 100vh; background: #0d1b2a; }
+    /* Basemap OSM: dibuat gelap saat tema dark */
+    body:not(.light-theme) .base-tiles { filter: invert(1) hue-rotate(180deg) brightness(0.85) contrast(0.9) saturate(0.6); }
+    .leaflet-control-attribution { font-size: 10px; background: rgba(255,255,255,0.7) !important; }
+
 
     /* Popup */
     .leaflet-popup-content-wrapper { background: var(--panel-bg); border: 1px solid var(--panel-border); border-radius: 8px; box-shadow: var(--shadow); color: var(--text-main); }
@@ -480,9 +484,13 @@ const KEC_LABEL_HIDE_ZOOM = 12;
 /* ════════════════════════════════════════
    MAP INIT
 ════════════════════════════════════════ */
-const map = L.map('map', { zoomControl: true, attributionControl: false });
-const baseTileLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-  maxZoom: 19, subdomains:'abcd'
+const map = L.map('map', { zoomControl: true, attributionControl: true });
+map.attributionControl.setPrefix(false);
+/* Basemap: OpenStreetMap (gratis, tanpa API key). Mode gelap memakai filter CSS (.base-tiles). */
+const baseTileLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19,
+  className: 'base-tiles',
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>'
 }).addTo(map);
 
 /* ════════════════════════════════════════
@@ -1203,10 +1211,7 @@ function toggleTheme() {
   currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
   document.body.classList.toggle('light-theme', currentTheme === 'light');
   document.getElementById('theme-icon').innerHTML = currentTheme === 'light' ? '&#9728;&#65039;' : '&#127769;';
-  const tileUrl = currentTheme === 'light'
-    ? 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
-    : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
-  baseTileLayer.setUrl(tileUrl);
+  /* Tile sama untuk kedua tema; tampilan gelap diatur oleh CSS (.base-tiles) */
   if (kecBoundaryLayer) kecBoundaryLayer.setStyle({ color: KEC_BOUNDARY_COLOR[currentTheme] });
 }
 
