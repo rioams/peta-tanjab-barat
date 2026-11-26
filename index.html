@@ -223,7 +223,12 @@
     .desa-label-inner{font-size:9px;font-weight:700;color:var(--lbl);text-shadow:0 0 3px var(--halo),0 0 3px var(--halo),0 0 6px var(--halo),0 0 6px var(--halo);white-space:normal;word-break:keep-all;overflow-wrap:normal;hyphens:none;pointer-events:none;text-align:center;line-height:1.15}
     .kec-label{background:transparent!important;border:none!important;box-shadow:none!important;z-index:450!important}
     .kec-label-inner{font-size:var(--kec-font-size,14px);font-weight:800;letter-spacing:.02em;color:var(--kec);text-shadow:0 0 4px var(--halo),0 0 4px var(--halo),0 0 8px var(--halo),0 0 8px var(--halo);white-space:normal;word-break:keep-all;overflow-wrap:normal;hyphens:none;pointer-events:none;text-align:center;line-height:1.2;transition:font-size .15s ease-out}
-    .desa-label-inner.desa-mini{font-size:6px;font-weight:700;opacity:.8;letter-spacing:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .desa-label-inner,.kec-label-inner{position:absolute;left:0;top:0;width:max-content;transform:translate(-50%,-50%)}
+    .desa-label-inner{font-size:9px}
+    .lbl-leader{stroke:var(--lbl);stroke-width:.8px;opacity:.75}
+    body.shot-mode .desa-label-inner{font-size:10.5px}
+    body.shot-mode .kec-label-inner{font-size:calc(var(--kec-font-size,14px)*1.15)}
+    #lbl-note{margin-left:10px;color:var(--bad);font-weight:600}
     #loading-overlay{display:none;position:fixed;inset:0;z-index:9999;align-items:center;justify-content:center;flex-direction:column;gap:14px;background:color-mix(in srgb,var(--bg-dark) 78%,transparent);backdrop-filter:blur(4px)}
     #loading-overlay.show{display:flex}
     .spinner{width:38px;height:38px;border:3px solid var(--panel-border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
@@ -350,7 +355,7 @@
       <span><i style="background:color-mix(in srgb,var(--bad) 55%,transparent);border-color:var(--bad)"></i>Buruk / Blankspot</span>
       <span><i style="background:color-mix(in srgb,var(--none) 35%,transparent);border-color:var(--none)"></i>Belum terdata</span>
     </div>
-    <div>Persentase dihitung dari jumlah desa/kelurahan</div>
+    <div>Persentase dihitung dari jumlah desa/kelurahan<span id="lbl-note"></span></div>
   </footer>
   <button id="shot-exit" onclick="exitShotMode()">&#10005; Keluar tampilan screenshot <kbd>Esc</kbd></button>
 </div>
@@ -594,14 +599,12 @@ function estimateLabelWidth(text, charW, minW, maxW) {
 function createDesaLabel(layer, desa) {
   const center = getPolygonCenter(layer);
   if (!center) return null;
-  // Lebar mengikuti kata terpanjang agar tidak ada kata yang terpecah saat wrap
-  const charW = 4.9, h = 12;
-  const w = estimateLabelWidth(desa, charW, 34, 92);
+  /* Batas lebar (em, relatif font 9px) = kata terpanjang tidak pernah terpecah; sisanya wrap antar kata. */
+  const w = estimateLabelWidth(desa, 4.9, 34, 92);
   const icon = L.divIcon({
     className: 'desa-label',
-    html: `<div class="desa-label-inner" style="width:${w}px">${desa}</div>`,
-    iconSize: [w, h],
-    iconAnchor: [w / 2, h / 2]   // titik anchor = tengah-tengah teks
+    html: `<div class="desa-label-inner" style="max-width:${(w / 9).toFixed(2)}em">${desa}</div>`,
+    iconSize: [0, 0], iconAnchor: [0, 0]
   });
   return L.marker(center, { icon, interactive: false, zIndexOffset: 500 });
 }
@@ -687,16 +690,11 @@ function buildKecamatanBoundaryData() {
 function createKecLabel(kec, geometry) {
   const center = getGeomCenter(geometry);
   if (!center) return null;
-  // charW dihitung berdasarkan ukuran font TERBESAR (KEC_FONT_MAX_PX) yang
-  // mungkin dipakai saat responsif terhadap zoom, agar kotak tidak pernah
-  // terlalu sempit dan memaksa kata terpecah.
-  const charW = 9.2, h = 22;
-  const w = estimateLabelWidth(kec, charW, 60, 150);
+  const w = estimateLabelWidth(kec, 9.2, 60, 150);   // px pada font 16px
   const icon = L.divIcon({
     className: 'kec-label',
-    html: `<div class="kec-label-inner" style="width:${w}px">${kec}</div>`,
-    iconSize: [w, h],
-    iconAnchor: [w / 2, h / 2]
+    html: `<div class="kec-label-inner" style="max-width:${(w / 16).toFixed(2)}em">${kec}</div>`,
+    iconSize: [0, 0], iconAnchor: [0, 0]
   });
   return L.marker(center, { icon, interactive: false, zIndexOffset: 10000 });
 }
@@ -804,32 +802,89 @@ function setDesaLabelsMini(mini) {
    setiap kali zoom/geser peta karena posisi layar berubah. */
 const DESA_MIN_GAP_PX = 30;   // jarak minimum antar label desa mini
 const KEC_MIN_GAP_PX  = 46;   // jarak minimum label desa mini dari titik label kecamatan
-function declutterDesaLabels(mini) {
-  // Jarak minimum antar label & terhadap label kecamatan berbeda tergantung
-  // ukuran teks yang sedang aktif (mini = font lebih kecil → jarak lebih rapat OK).
-  const minGapDesa = mini ? DESA_MIN_GAP_PX : 20;
-  const minGapKec  = mini ? KEC_MIN_GAP_PX  : 34;
+function declutterDesaLabels() { layoutLabels(); }
 
-  const kecPoints = Object.values(kecLabelMarkers)
-    .filter(m => map.hasLayer(m))
-    .map(m => map.latLngToContainerPoint(m.getLatLng()));
+/* ════════════════════════════════════════
+   PENATA LABEL — tanpa tumpang tindih
+   Urutan: label kecamatan (prioritas) → label desa dari polygon terkecil.
+   Tiap label mencoba: posisi tengah → geser ke samping/atas/bawah (selama
+   titik tengahnya masih di dalam desa) → perkecil font (maks. ±22%) →
+   cadangan: ruang kosong terdekat dengan garis penunjuk tipis.
+════════════════════════════════════════ */
+const LBL_SCALES = [1, 0.88, 0.78];
+let labelLeaders = null;
+function layoutLabels() {
+  if (!labelLeaders) labelLeaders = L.layerGroup().addTo(map);
+  labelLeaders.clearLayers();
+  const size = map.getSize(), pad = 2, placed = [];
+  const rectAt = (x, y, w, h) => ({ l: x - w / 2, t: y - h / 2, r: x + w / 2, b: y + h / 2 });
+  const clash = r => placed.some(o => r.l < o.r + pad && o.l < r.r + pad && r.t < o.b + pad && o.t < r.b + pad);
 
-  const placed = [];
-  Object.values(desaLabelMarkers).forEach(m => {
+  Object.values(kecLabelMarkers).forEach(m => {
     if (!map.hasLayer(m)) return;
-    const el = m.getElement && m.getElement();
-    if (!el) return;
-    const pt = map.latLngToContainerPoint(m.getLatLng());
-    const tooCloseToKec   = kecPoints.some(kp => pt.distanceTo(kp) < minGapKec);
-    const tooCloseToOther = placed.some(pp => pt.distanceTo(pp) < minGapDesa);
-    if (tooCloseToKec || tooCloseToOther) {
-      el.style.visibility = 'hidden';
-    } else {
-      el.style.visibility = '';
-      placed.push(pt);
-    }
+    const inner = m.getElement() && m.getElement().querySelector('.kec-label-inner');
+    if (!inner) return;
+    const c = map.latLngToContainerPoint(m.getLatLng());
+    placed.push(rectAt(c.x, c.y, inner.offsetWidth, inner.offsetHeight));
   });
+
+  const items = [];
+  Object.keys(desaLabelMarkers).forEach(key => {
+    const m = desaLabelMarkers[key], layer = layerMap[key];
+    if (!layer || !map.hasLayer(m)) return;
+    const el = m.getElement(), inner = el && el.querySelector('.desa-label-inner');
+    if (!inner) return;
+    inner.style.fontSize = ''; inner.style.transform = ''; el.style.visibility = '';
+    items.push({ m, el, inner, layer });
+  });
+  items.forEach(it => {
+    it.fs = parseFloat(getComputedStyle(it.inner).fontSize);
+    it.w = it.inner.offsetWidth; it.h = it.inner.offsetHeight;
+    it.c = map.latLngToContainerPoint(it.m.getLatLng());
+    const b = it.layer.getBounds(), a = map.latLngToContainerPoint(b.getNorthWest()), z = map.latLngToContainerPoint(b.getSouthEast());
+    it.area = Math.abs((z.x - a.x) * (z.y - a.y));
+  });
+  items.sort((a, b) => a.area - b.area);   // desa kecil dulu: ruangnya paling terbatas
+
+  const inside = (it, x, y) => !it.layer._containsPoint || it.layer._containsPoint(map.containerPointToLayerPoint([x, y]));
+  const put = (it, x, y, s, rect) => {
+    placed.push(rect);
+    it.inner.style.fontSize = (it.fs * s) + 'px';
+    it.inner.style.transform = `translate(-50%,-50%) translate(${x - it.c.x}px,${y - it.c.y}px)`;
+  };
+  let hidden = 0;
+  items.forEach(it => {
+    if (it.c.x < 0 || it.c.y < 0 || it.c.x > size.x || it.c.y > size.y) return;   // di luar layar
+    let done = false;
+    for (const s of LBL_SCALES) {
+      const w = it.w * s, h = it.h * s, offs = [[0, 0]];
+      for (let k = 1; k <= 3; k++) {
+        const dy = k * (h + 1), dx = k * w * 0.55;
+        offs.push([0, -dy], [0, dy], [-dx, 0], [dx, 0], [-dx, -dy], [dx, -dy], [-dx, dy], [dx, dy]);
+      }
+      for (const [dx, dy] of offs) {
+        const x = it.c.x + dx, y = it.c.y + dy, r = rectAt(x, y, w, h);
+        if (inside(it, x, y) && !clash(r)) { put(it, x, y, s, r); done = true; break; }
+      }
+      if (done) break;
+    }
+    if (done) return;
+    const s = LBL_SCALES[LBL_SCALES.length - 1], w = it.w * s, h = it.h * s;
+    for (let rad = 14; rad <= 84 && !done; rad += 14) {
+      for (let i = 0; i < 12; i++) {
+        const ang = i * Math.PI / 6, x = it.c.x + Math.cos(ang) * (rad + w / 2), y = it.c.y + Math.sin(ang) * (rad + h / 2), r = rectAt(x, y, w, h);
+        if (r.l < 0 || r.t < 0 || r.r > size.x || r.b > size.y || clash(r)) continue;
+        put(it, x, y, s, r);
+        labelLeaders.addLayer(L.polyline([it.m.getLatLng(), map.containerPointToLatLng([x, y])], { className: 'lbl-leader', weight: 1, interactive: false }));
+        done = true; break;
+      }
+    }
+    if (!done) { it.el.style.visibility = 'hidden'; hidden++; }
+  });
+  const note = document.getElementById('lbl-note');
+  if (note) note.textContent = (shotMode && hidden) ? hidden + ' nama desa tidak muat pada ukuran ini' : '';
 }
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (showLabels) layoutLabels(); });
 
 function toggleLabels(sourceId) {
   const src = document.getElementById(sourceId);
@@ -1466,6 +1521,7 @@ function shotFit() {
     if (kb.isValid()) { b = kb; maxZoom = 13; }
   }
   map.fitBounds(b, { padding:[14,14], maxZoom, animate:false });
+  setTimeout(layoutLabels, 40);
 }
 
 function shotShowUI() {
@@ -1517,6 +1573,7 @@ function exitShotMode() {
     if (currentViewMode === 'kecamatan' && highlightKec) applyHighlight(highlightKec);
     else map.fitBounds(geoLayer.getBounds(), { padding:[20,20] });
   }, 60);
+  setTimeout(layoutLabels, 200);
 }
 
 document.addEventListener('mousemove', () => { if (shotMode) shotShowUI(); });
