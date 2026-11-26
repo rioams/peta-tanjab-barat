@@ -218,6 +218,7 @@
     .popup-status{display:inline-flex;align-items:center;gap:8px;margin-top:10px;padding:6px 12px 6px 10px;border-radius:99px;font-size:12.5px;font-weight:700}
     .status-baik{background:color-mix(in srgb,var(--good) 16%,transparent)}.status-sedang{background:color-mix(in srgb,var(--medium) 18%,transparent)}
     .status-buruk{background:color-mix(in srgb,var(--bad) 16%,transparent)}.status-default{background:var(--input-bg)}
+    .kec-line{filter:drop-shadow(0 0 1px var(--halo)) drop-shadow(0 0 2px var(--halo))}
     .desa-label{background:transparent!important;border:none!important;box-shadow:none!important}
     .desa-label-inner{font-size:9px;font-weight:700;color:var(--lbl);text-shadow:0 0 3px var(--halo),0 0 3px var(--halo),0 0 6px var(--halo),0 0 6px var(--halo);white-space:normal;word-break:keep-all;overflow-wrap:normal;hyphens:none;pointer-events:none;text-align:center;line-height:1.15}
     .kec-label{background:transparent!important;border:none!important;box-shadow:none!important;z-index:450!important}
@@ -384,7 +385,7 @@ const desaLabelMarkers = {};         // key -> L.marker label
 /* Warna garis batas kecamatan per tema — coklat, senada dengan warna label nama
    kecamatan, agar konsisten secara visual. Ketebalan dibuat tipis (halus) agar
    tidak terlalu mendominasi tampilan peta. */
-const KEC_BOUNDARY_COLOR = { dark: '#cbd5e1', light: '#475569' };
+const KEC_BOUNDARY_COLOR = { dark: '#f8fafc', light: '#0f172a' };
 
 /* Batas & label kecamatan (mode "Semua Kabupaten") */
 const kecLabelMarkers  = {};         // kecamatan -> L.marker label
@@ -421,10 +422,10 @@ function getStyle(status, dimmed) {
   /* Garis tipis putih antar desa, isi sesuai status sinyal. */
   const line = 'rgba(255,255,255,0.85)';
   if (dimmed) return { color:'#64748b', weight:0.5, opacity:0.5, fillColor:'#64748b', fillOpacity:0.12 };
-  if (status === 'baik')   return { color:line, weight:1.2, opacity:1, fillColor:'#19b077', fillOpacity:0.62 };
-  if (status === 'sedang') return { color:line, weight:1.2, opacity:1, fillColor:'#f2a61f', fillOpacity:0.62 };
-  if (status === 'buruk')  return { color:line, weight:1.2, opacity:1, fillColor:'#ef4f52', fillOpacity:0.62 };
-  return { color:line, weight:1.2, opacity:0.9, fillColor:'#94a3b8', fillOpacity:0.3 };
+  if (status === 'baik')   return { color:line, weight:0.8, opacity:1, fillColor:'#19b077', fillOpacity:0.62 };
+  if (status === 'sedang') return { color:line, weight:0.8, opacity:1, fillColor:'#f2a61f', fillOpacity:0.62 };
+  if (status === 'buruk')  return { color:line, weight:0.8, opacity:1, fillColor:'#ef4f52', fillOpacity:0.62 };
+  return { color:line, weight:0.8, opacity:0.9, fillColor:'#94a3b8', fillOpacity:0.3 };
 }
 
 function makePopup(kec, desa, jenis, status) {
@@ -704,7 +705,7 @@ function initKecamatanBoundariesAndLabels() {
   const kecData = buildKecamatanBoundaryData();
 
   kecBoundaryLayer = L.geoJSON(kecData, {
-    style: { color: KEC_BOUNDARY_COLOR[currentTheme], weight: 1.4, opacity: 0.9, fillOpacity: 0 },
+    style: { color: KEC_BOUNDARY_COLOR[currentTheme], weight: 3, opacity: 1, fillOpacity: 0, lineJoin: 'round', className: 'kec-line' },
     interactive: false
   });
 
