@@ -224,9 +224,9 @@
     .kec-label{background:transparent!important;border:none!important;box-shadow:none!important;z-index:450!important}
     .kec-label-inner{font-size:var(--kec-font-size,14px);font-weight:800;letter-spacing:.02em;color:var(--kec);text-shadow:0 0 4px var(--halo),0 0 4px var(--halo),0 0 8px var(--halo),0 0 8px var(--halo);white-space:normal;word-break:keep-all;overflow-wrap:normal;hyphens:none;pointer-events:none;text-align:center;line-height:1.2;transition:font-size .15s ease-out}
     .desa-label-inner,.kec-label-inner{position:absolute;left:0;top:0;width:max-content;transform:translate(-50%,-50%)}
-    .desa-label-inner{font-size:9px}
+    .desa-label-inner{font-size:var(--desa-fs,10px)}
     .lbl-leader{stroke:var(--lbl);stroke-width:.8px;opacity:.75}
-    body.shot-mode .desa-label-inner{font-size:10.5px}
+    body.shot-mode .desa-label-inner{font-size:calc(var(--desa-fs,9px)*1.15)}
     body.shot-mode .kec-label-inner{font-size:calc(var(--kec-font-size,14px)*1.15)}
     #lbl-note{margin-left:10px;color:var(--bad);font-weight:600}
     #loading-overlay{display:none;position:fixed;inset:0;z-index:9999;align-items:center;justify-content:center;flex-direction:column;gap:14px;background:color-mix(in srgb,var(--bg-dark) 78%,transparent);backdrop-filter:blur(4px)}
@@ -629,6 +629,7 @@ function showDesaLabelsForKec(kec) {
 }
 
 function hideAllDesaLabels() {
+  if (labelLeaders) labelLeaders.clearLayers();   // hapus garis penunjuk ikut label
   Object.values(desaLabelMarkers).forEach(m => { if (map.hasLayer(m)) map.removeLayer(m); });
 }
 
@@ -812,8 +813,11 @@ function declutterDesaLabels() { layoutLabels(); }
    cadangan: ruang kosong terdekat dengan garis penunjuk tipis.
 ════════════════════════════════════════ */
 const LBL_SCALES = [1, 0.88, 0.78];
-let labelLeaders = null;
+var labelLeaders = null;   // garis penunjuk label
 function layoutLabels() {
+  document.documentElement.style.setProperty('--desa-fs', '10px');
+  /* Tampilan menyeluruh (zoom jauh / screenshot): nama tetap TEPAT di lokasi desanya, hanya diperkecil agar muat. */
+  const exact = shotMode || map.getZoom() < KEC_LABEL_HIDE_ZOOM, MIN_PX = 4.5;
   if (!labelLeaders) labelLeaders = L.layerGroup().addTo(map);
   labelLeaders.clearLayers();
   const size = map.getSize(), pad = 2, placed = [];
@@ -842,7 +846,8 @@ function layoutLabels() {
     it.w = it.inner.offsetWidth; it.h = it.inner.offsetHeight;
     it.c = map.latLngToContainerPoint(it.m.getLatLng());
     const b = it.layer.getBounds(), a = map.latLngToContainerPoint(b.getNorthWest()), z = map.latLngToContainerPoint(b.getSouthEast());
-    it.area = Math.abs((z.x - a.x) * (z.y - a.y));
+    it.bw = Math.abs(z.x - a.x); it.bh = Math.abs(z.y - a.y);
+    it.area = it.bw * it.bh;
   });
   items.sort((a, b) => a.area - b.area);   // desa kecil dulu: ruangnya paling terbatas
 
@@ -855,6 +860,16 @@ function layoutLabels() {
   let hidden = 0;
   items.forEach(it => {
     if (it.c.x < 0 || it.c.y < 0 || it.c.x > size.x || it.c.y > size.y) return;   // di luar layar
+    if (exact) {
+      const smin = MIN_PX / it.fs;
+      let s = Math.max(smin, Math.min(1, 0.9 * it.bw / it.w, 0.9 * it.bh / it.h));
+      for (let i = 0; i < 8; i++) {
+        const r = rectAt(it.c.x, it.c.y, it.w * s, it.h * s);
+        if (!clash(r) || s <= smin + 1e-6) { put(it, it.c.x, it.c.y, s, r); break; }
+        s = Math.max(smin, s * 0.85);
+      }
+      return;
+    }
     let done = false;
     for (const s of LBL_SCALES) {
       const w = it.w * s, h = it.h * s, offs = [[0, 0]];
